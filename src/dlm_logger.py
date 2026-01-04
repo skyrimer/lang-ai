@@ -18,9 +18,10 @@ def setup_logging(name: str = __name__, level: int = logging.INFO) -> logging.Lo
     # prevent adding multiple handlers if setup is called multiple times
     if not logger.handlers:
         logger.setLevel(level)
-
         handler = logging.StreamHandler(sys.stdout)
-        formatter = logging.Formatter("%(levelname)s: %(asctime)s  - %(message)s")
+        formatter = logging.Formatter(
+            "%(levelname)s: %(asctime)s  - %(message)s", datefmt="%d-%m-%Y %H:%M:%S"
+        )
         handler.setFormatter(formatter)
 
         logger.addHandler(handler)

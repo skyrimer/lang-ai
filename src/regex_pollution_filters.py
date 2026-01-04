@@ -1,7 +1,8 @@
 import pandas as pd
+from tqdm.auto import tqdm
 from pydantic import BaseModel, Field
 from typing import Literal
-from dlm_logger import setup_logging
+from src.dlm_logger import setup_logging
 
 logger = setup_logging()
 
@@ -57,17 +58,17 @@ class PollutionFilter(BaseModel):
         pattern_name: str,
     ) -> pd.DataFrame:
         """
-        Filter out rows where the text column matches a specific pattern.
+        Filters out rows where the text column matches a specific regex pattern.
 
         Args:
-            df: DataFrame containing posts
-            pattern_name: Name of the pattern to filter by
+            df (pd.DataFrame): The input DataFrame containing posts.
+            pattern_name (str): The name of the pattern to filter by (e.g., 'bot', 'ad', 'ai').
 
         Returns:
-            DataFrame with matching rows removed
+            pd.DataFrame: The DataFrame with matching rows removed.
 
         Raises:
-            KeyError: If pattern_name is not found in filter_patterns
+            KeyError: If the specified pattern_name is not found in filter_patterns.
         """
         logger.info(f"Filtering by pattern: {pattern_name}")
         if pattern_name not in self.filter_patterns:
@@ -86,19 +87,20 @@ class PollutionFilter(BaseModel):
         pattern_names: list[str] | Literal["all"],
     ) -> pd.DataFrame:
         """
-        Filter out rows matching multiple patterns.
+        Filters out rows matching multiple regex patterns.
 
         Args:
-            df: DataFrame containing posts
-            pattern_names: List of pattern names to filter by, or "all" for all patterns
+            df (pd.DataFrame): The input DataFrame containing posts.
+            pattern_names (list[str] | Literal["all"]): A list of pattern names to filter by,
+                or "all" to apply all available patterns.
 
         Returns:
-            DataFrame with all matching rows removed
+            pd.DataFrame: The DataFrame with all matching rows removed.
         """
         if pattern_names == "all":
             pattern_names = list(self.filter_patterns.keys())
         logger.info(f"Filtering by patterns: {pattern_names}")
-        for pattern_name in pattern_names:
+        for pattern_name in tqdm(pattern_names, desc="Filtering pollution"):
             df = self.filter_by_pattern(df, pattern_name)
         logger.info(f"Removed {df.shape[0]} rows matching all patterns")
         return df

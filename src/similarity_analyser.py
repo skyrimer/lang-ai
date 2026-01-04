@@ -5,8 +5,8 @@ from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import connected_components
 from sklearn.feature_extraction.text import CountVectorizer
 from pydantic import BaseModel, ConfigDict, PrivateAttr, Field
-from dlm_logger import setup_logging
-from tqdm import tqdm
+from src.dlm_logger import setup_logging
+from tqdm.auto import tqdm
 
 logger = setup_logging()
 
@@ -19,10 +19,14 @@ class SimilarityAnalyzer(BaseModel):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    text_column: str = "post"
-    threshold: float = 0.8
-    ngram_range: tuple[int, int] = (5, 5)
-    analyzer: str = "char_wb"  # Intra-word boundaries
+    text_column: str = Field("post", description="Column containing text data")
+    threshold: float = Field(0.8, description="Similarity threshold for clustering")
+    ngram_range: tuple[int, int] = Field(
+        (5, 5), description="Range of n-grams for similarity analysis"
+    )
+    analyzer: str = Field(
+        "char_wb", description="Analyzer type for n-grams (e.g., 'char_wb')"
+    )
     batch_size: int = Field(
         default=500, description="Number of texts to process per batch"
     )
@@ -34,7 +38,7 @@ class SimilarityAnalyzer(BaseModel):
         Computes the sparse Jaccard similarity matrix for the text column in batches.
 
         Args:
-            df (pd.DataFrame): The input DataFrame.
+            df (pd.DataFrame): The input DataFrame containing the text column.
 
         Returns:
             csr_matrix: The computed sparse similarity matrix.
@@ -123,7 +127,10 @@ class SimilarityAnalyzer(BaseModel):
             df (pd.DataFrame): The input DataFrame.
 
         Returns:
-            pd.DataFrame: The DataFrame with 'similarity_cluster_id' and 'is_similarity_clustered' columns.
+            pd.DataFrame: The DataFrame with 'similarity_cluster_id' and 'is_similarity_clustered' columns added.
+
+        Raises:
+            ValueError: If the similarity matrix has not been computed yet.
         """
         if self._similarity_matrix is None:
             raise ValueError(
@@ -158,13 +165,13 @@ class SimilarityAnalyzer(BaseModel):
 
     def run(self, df: pd.DataFrame) -> tuple[pd.DataFrame, csr_matrix]:
         """
-        Runs the full similarity analysis pipeline: computing matrix and identifying clusters.
+        Executes the full similarity analysis pipeline: matrix computation and cluster identification.
 
         Args:
             df (pd.DataFrame): The input DataFrame.
 
         Returns:
-            tuple[pd.DataFrame, csr_matrix]: The clustered DataFrame and the similarity matrix.
+            tuple[pd.DataFrame, csr_matrix]: A tuple containing the clustered DataFrame and the similarity matrix.
         """
         matrix = self.compute_similarity_matrix(df)
         df_clustered = self.identify_clusters(df)
@@ -177,19 +184,23 @@ def resolve_similarity_clusters(
     """
     Filters the clustered DataFrame based on stylometric best practices.
 
-    1. Multi-User Clusters (Viral/Copypasta) -> Drop ALL posts in cluster.
+    The resolution strategy is as follows:
+    1. Multi-User Clusters (Viral/Copypasta) -> Drop ALL posts in the cluster.
        Reason: Cannot safely attribute authorship if multiple users post the same text.
     2. Single-User Clusters (Self-Reposts) -> Keep the LONGEST post.
        Reason: Preserves the instance with the most stylometric signal.
     3. Non-Clustered Posts -> Keep as is.
 
     Args:
-        df (pd.DataFrame): The DataFrame with similarity clusters.
-        text_column (str): The name of the column containing the text.
-        user_column (str): The name of the column containing the user ID.
+        df (pd.DataFrame): The DataFrame with similarity clusters (must have 'similarity_cluster_id' and 'is_similarity_clustered' columns).
+        text_column (str): The name of the column containing the text. Defaults to "post".
+        user_column (str): The name of the column containing the user ID. Defaults to "user_id".
 
     Returns:
-        pd.DataFrame: The resolved DataFrame.
+        pd.DataFrame: The resolved DataFrame with near-duplicates handled.
+
+    Raises:
+        ValueError: If the required clustering columns are missing from the DataFrame.
     """
     if (
         "similarity_cluster_id" not in df.columns

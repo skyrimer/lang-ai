@@ -3,8 +3,7 @@ import zipfile
 from pathlib import Path
 from tqdm import tqdm
 from src.utils import get_env_var, get_project_root
-
-from dlm_logger import setup_logging
+from src.dlm_logger import setup_logging
 
 logger = setup_logging()
 

@@ -1,12 +1,15 @@
 from pathlib import Path
 import pandas as pd
+import swifter
+from tqdm.auto import tqdm
 from pydantic import BaseModel, Field
-from utils import get_project_root
-from dlm_logger import setup_logging
-from text_normalizer import TextNormalizer
-from similarity_analyser import SimilarityAnalyzer, resolve_similarity_clusters
+
+from src.utils import get_project_root
+from src.dlm_logger import setup_logging
+from src.text_normalizer import TextNormalizer
+from src.similarity_analyser import SimilarityAnalyzer, resolve_similarity_clusters
 from typing import Callable
-from regex_pollution_filters import PollutionFilter
+from src.regex_pollution_filters import PollutionFilter
 from collections import Counter
 
 logger = setup_logging()
@@ -67,7 +70,7 @@ def clean_content(df: pd.DataFrame) -> pd.DataFrame:
         pd.DataFrame: The DataFrame with normalized post content.
     """
     logger.info("Normalizing text content...")
-    df["post"] = df["post"].apply(TextNormalizer().normalize_text)
+    df["post"] = df["post"].swifter.apply(TextNormalizer().normalize_text)
     logger.info("Text normalization completed.")
     return df
 
@@ -91,6 +94,15 @@ def deduplicate_posts(df: pd.DataFrame, threshold: float = 0.8) -> pd.DataFrame:
 
 
 def remove_messy_posts(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Removes posts that are considered 'polluted' (e.g., bot messages, ads, AI-generated).
+
+    Args:
+        df (pd.DataFrame): The input DataFrame.
+
+    Returns:
+        pd.DataFrame: The DataFrame with polluted posts removed.
+    """
     return PollutionFilter().filter_by_patterns(df, "all")
 
 
@@ -99,6 +111,14 @@ def normalize_post_size(
 ) -> pd.DataFrame:
     """
     Filters posts based on quality criteria like length and non-alphanumeric ratio.
+
+    Args:
+        df (pd.DataFrame): The input DataFrame.
+        min_words (int): Minimum number of words required in a post. Defaults to 300.
+        max_chars (int): Maximum number of characters allowed in a post. Defaults to 10,000.
+
+    Returns:
+        pd.DataFrame: The filtered DataFrame.
     """
     initial_count = len(df)
 
@@ -111,31 +131,53 @@ def normalize_post_size(
     return df
 
 
-def most_common_word_ratio(text):
+def most_common_word_ratio(text: str) -> float:
+    """
+    Computes the ratio of the most frequent word in the text.
+
+    Args:
+        text (str): The input text.
+
+    Returns:
+        float: The ratio of the most frequent word's count to the total word count.
+    """
     words = text.split()
+    if not words:
+        return 0.0
     word_counts = Counter(words)
     most_common_count = word_counts.most_common(1)[0][1]
     return most_common_count / len(words)
 
 
-def non_standard_word_ratio(text):
+def non_standard_word_ratio(text: str) -> float:
+    """
+    Computes the ratio of non-alphanumeric words in the text.
+
+    Args:
+        text (str): The input text.
+
+    Returns:
+        float: The ratio of non-alphanumeric words to the total word count.
+    """
     words = text.split()
+    if not words:
+        return 0.0
     return sum(1 for word in words if not word.isalnum()) / len(words)
 
 
-def filter_by_non_standard_ratio(df, threshold=0.4):
+def filter_by_non_standard_ratio(df: pd.DataFrame, threshold: float = 0.4) -> pd.DataFrame:
     """
-    Filter dataframe for posts that have non_standard_word_ratio less than threshold.
+    Filters the DataFrame for posts that have a non-standard word ratio less than the threshold.
 
     Args:
-        df: Input dataframe with 'post' column
-        threshold: Maximum allowed non_standard_word_ratio (default: 0.4)
+        df (pd.DataFrame): The input DataFrame.
+        threshold (float): Maximum allowed non-standard word ratio. Defaults to 0.4.
 
     Returns:
-        Filtered dataframe
+        pd.DataFrame: The filtered DataFrame.
     """
     df_filtered = df.copy()
-    df_filtered["non_standard_word_ratio"] = df_filtered["post"].apply(
+    df_filtered["non_standard_word_ratio"] = df_filtered["post"].swifter.apply(
         non_standard_word_ratio
     )
 
@@ -144,30 +186,36 @@ def filter_by_non_standard_ratio(df, threshold=0.4):
     )
 
 
-# Function to remove most common word if ratio exceeds threshold
-def remove_common_word_by_ratio(df, threshold=0.3):
+def remove_common_word_by_ratio(df: pd.DataFrame, threshold: float = 0.3) -> pd.DataFrame:
     """
-    Compute most_common_word_ratio and remove the most common word from posts
-    where the ratio exceeds the threshold.
+    Removes the most common word from posts where its ratio exceeds the threshold.
 
     Args:
-        df: Input dataframe with 'post' column
-        threshold: Minimum ratio to trigger removal (default: 0.3)
+        df (pd.DataFrame): The input DataFrame.
+        threshold (float): Minimum ratio to trigger removal. Defaults to 0.3.
 
     Returns:
-        Dataframe with cleaned posts
+        pd.DataFrame: The DataFrame with cleaned posts.
     """
     df_cleaned = df.copy()
 
-    df_cleaned["most_common_word_ratio"] = df_cleaned["post"].apply(
+    df_cleaned["most_common_word_ratio"] = df_cleaned["post"].swifter.apply(
         most_common_word_ratio
     )
 
-    # Remove most common word where ratio exceeds threshold
-    def sanitize_text(row):
+    def sanitize_text(row: pd.Series) -> str:
+        """
+        Sanitizes a single row by removing the most common word if it exceeds the threshold.
+
+        Args:
+            row (pd.Series): The row containing 'post' and 'most_common_word_ratio'.
+
+        Returns:
+            str: The sanitized text.
+        """
         if row["most_common_word_ratio"] > threshold:
             words = row["post"].split()
-            if len(words) == 0:
+            if not words:
                 return row["post"]
 
             word_counts = Counter(words)
@@ -176,7 +224,7 @@ def remove_common_word_by_ratio(df, threshold=0.3):
             return " ".join(sanitized_words)
         return row["post"]
 
-    df_cleaned["post"] = df_cleaned.apply(sanitize_text, axis=1)
+    df_cleaned["post"] = df_cleaned.swifter.apply(sanitize_text, axis=1)
 
     return df_cleaned.drop(columns=["most_common_word_ratio"])
 
@@ -201,7 +249,7 @@ class PreprocessingSteps(BaseModel):
             pd.DataFrame: The preprocessed DataFrame.
         """
         logger.info("Running preprocessing steps...")
-        for step_name, step_func in self.steps:
+        for step_name, step_func in tqdm(self.steps, desc="Preprocessing"):
             logger.info(f"Running step: {step_name}")
             df = step_func(df)
             logger.info(f"Step {step_name} completed.")

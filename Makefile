@@ -14,4 +14,8 @@ sync:
 reinstall-project: remove-venv create-venv sync
 
 format:
-	uv run ruff format .
+	uv format
+
+logfire-auth:
+	uv run logfire auth
+	uv run logfire projects use lang-and-ai

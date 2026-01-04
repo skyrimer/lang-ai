@@ -1,6 +1,5 @@
 import os
 from pathlib import Path
-from typing import Any
 
 
 def get_env_var(key: str) -> str:

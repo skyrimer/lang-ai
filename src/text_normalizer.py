@@ -136,7 +136,8 @@ class TextNormalizer(BaseModel):
 
     def normalize_text(self, text: str) -> str:
         """
-        Applies normalization steps to the input text.
+        Applies normalization steps to the input text, including unescaping HTML,
+        normalizing unicode, and replacing non-stylometric elements with tokens.
 
         Args:
             text (str): The raw text to normalize.
