@@ -2,7 +2,7 @@ import pandas as pd
 from tqdm.auto import tqdm
 from pydantic import BaseModel, Field
 from typing import Literal
-from src.dlm_logger import setup_logging
+from src.lang_ai.core.logger import setup_logging
 
 logger = setup_logging()
 

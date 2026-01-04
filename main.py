@@ -1,8 +1,8 @@
 import asyncio
 import logfire
-from src.data_preprocessor import preprocess_data
-from src.llm_judge import run_judge_pipeline
-from src.utils import get_env_var
+from src.lang_ai.data.preprocessor import preprocess_data
+from src.lang_ai.judge.agent import run_judge_pipeline
+from src.lang_ai.core.utils import get_env_var
 # Configure logfire
 logfire.configure()
 logfire.instrument_pydantic_ai()

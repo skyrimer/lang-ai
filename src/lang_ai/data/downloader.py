@@ -2,8 +2,8 @@ import requests
 import zipfile
 from pathlib import Path
 from tqdm import tqdm
-from src.utils import get_env_var, get_project_root
-from src.dlm_logger import setup_logging
+from src.lang_ai.core.utils import get_env_var, get_project_root
+from src.lang_ai.core.logger import setup_logging
 
 logger = setup_logging()
 
@@ -90,3 +90,7 @@ def download_pipeline() -> None:
     link, password = get_env_var("SURFDRIVE_LINK"), get_env_var("SURFDRIVE_PASSWORD")
     output_file = get_project_root() / "raw_data" / "raw_data.zip"
     download_surfdrive_folder(link, password, output_file)
+
+
+if __name__ == "__main__":
+    download_pipeline()

@@ -4,12 +4,12 @@ import swifter
 from tqdm.auto import tqdm
 from pydantic import BaseModel, Field
 
-from src.utils import get_project_root
-from src.dlm_logger import setup_logging
-from src.text_normalizer import TextNormalizer
-from src.similarity_analyser import SimilarityAnalyzer, resolve_similarity_clusters
+from src.lang_ai.core.utils import get_project_root
+from src.lang_ai.core.logger import setup_logging
+from src.lang_ai.data.normalizer import TextNormalizer
+from src.lang_ai.analysis.similarity import SimilarityAnalyzer, resolve_similarity_clusters
 from typing import Callable
-from src.regex_pollution_filters import PollutionFilter
+from src.lang_ai.data.filters import PollutionFilter
 from collections import Counter
 
 logger = setup_logging()

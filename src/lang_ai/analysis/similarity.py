@@ -5,7 +5,7 @@ from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import connected_components
 from sklearn.feature_extraction.text import CountVectorizer
 from pydantic import BaseModel, ConfigDict, PrivateAttr, Field
-from src.dlm_logger import setup_logging
+from src.lang_ai.core.logger import setup_logging
 from tqdm.auto import tqdm
 
 logger = setup_logging()

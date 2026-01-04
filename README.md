@@ -1,23 +1,29 @@
 # Lang-AI: Language and AI Project
 
-A Python project for stylometric analysis and data preprocessing of Reddit posts.
+A Python project for stylometric analysis, data preprocessing, and LLM-based evaluation of Reddit posts.
 
 ## Project Overview
 
-This project provides tools for downloading, cleaning, and preprocessing text data (specifically Reddit posts) to prepare it for stylometric analysis. It includes features for text normalization, duplicate removal based on similarity, and handling common data issues.
+This project provides a robust pipeline for downloading, cleaning, and preprocessing text data (specifically Reddit posts) to prepare it for stylometric analysis. It includes advanced features for text normalization, multi-stage filtering, similarity-based deduplication, and an LLM-as-a-Judge infrastructure for data leakage detection.
 
 ## Key Features
 
-- **Data Downloading**: Automated download and extraction of raw data from SurfDrive.
-- **Text Normalization**: Replaces non-stylometric elements like URLs, emails, user mentions, and IP addresses with specific tokens.
-- **Similarity-Based Deduplication**: Identifies and resolves near-duplicate posts using Jaccard similarity and connected components clustering.
-- **LLM-as-a-Judge**: Infrastructure to score posts for data leakage and pollution using various LLM providers (OpenAI, Google, Hugging Face).
-- **Configurable Pipelines**: Easy-to-define preprocessing steps using Pydantic models.
-- **Logging**: Standardized logging for tracking the preprocessing progress.
+- **Automated Data Management**: Streamlined downloading and extraction of raw data from SurfDrive.
+- **Advanced Text Normalization**: High-precision regex-based replacement of non-stylometric elements (URLs, emails, user mentions, IP addresses) with standardized tokens.
+- **Multi-Stage Preprocessing Pipeline**: A configurable pipeline that includes:
+    - Typo correction in headers.
+    - Non-standard word ratio filtering.
+    - Repetitive wording removal.
+    - Length and quality normalization.
+    - Pattern-based "messy" post filtering (bots, ads, etc.).
+- **Similarity-Based Deduplication**: Identification and resolution of near-duplicate posts using Jaccard similarity and connected components clustering.
+- **LLM-as-a-Judge**: A powerful evaluation framework using `pydantic-ai` to score posts for data leakage and pollution across multiple LLM providers (OpenAI, Google, Hugging Face).
+- **Observability**: Integrated with **Logfire** for real-time tracking, logging, and performance monitoring of the entire pipeline.
+- **Resilient Execution**: Incremental processing and resume capabilities for the LLM Judge to handle large datasets efficiently.
 
 ## Installation
 
-This project uses `uv` for dependency management.
+This project uses `uv` for lightning-fast dependency management.
 
 1. **Clone the repository**:
    ```bash
@@ -28,83 +34,89 @@ This project uses `uv` for dependency management.
 2. **Set up the environment**:
    Create a `.env` file in the root directory and add the required environment variables:
    ```env
+   # Data Source
    SURFDRIVE_LINK=<your-surfdrive-link>
    SURFDRIVE_PASSWORD=<your-surfdrive-password>
+
+   # LLM Judge Configuration
+   LLM_MODEL=openai:gpt-4o-mini  # or huggingface:model_name:provider
+   OPENAI_API_KEY=<your-openai-key>
+   HF_API_KEY=<your-huggingface-key>
    ```
 
 3. **Install dependencies**:
    ```bash
    make sync
    ```
-   Or using `uv` directly:
+
+4. **Configure Observability (Optional)**:
    ```bash
-   uv sync
+   make logfire-auth
    ```
 
 ## Usage
 
-### 1. Download Raw Data
-To download the raw data from SurfDrive:
-```bash
-uv run src/download_raw_data.py
-```
-
-### 2. Run Preprocessing
-To run the preprocessing pipeline:
+### 1. Run the Full Pipeline
+The easiest way to run both preprocessing and the LLM judge is through `main.py`:
 ```bash
 uv run main.py
 ```
-Alternatively, you can run the preprocessor script directly:
-```bash
-uv run src/data_preprocessor.py
-```
-This will:
-- Load the raw data.
-- Fix column name typos.
-- Normalize post content.
-- Remove authors with exact duplicate posts.
-- Deduplicate similar posts across the dataset.
-- Save the cleaned data to `preprocessed_data/preprocessed_data.csv`.
 
-### 3. Run LLM Judge
-To run the LLM judge on the preprocessed data:
-```bash
-uv run run_judge.py --model gpt-4o --provider openai --sample 10
-```
-Arguments:
-- `--input`: Path to input CSV (default: `preprocessed_data/preprocessed_data.csv`).
-- `--output`: Path to output CSV (default: `results/judge_results.csv`).
-- `--model`: Model name (e.g., `gpt-4o`, `gemini-1.5-pro`, `meta-llama/Llama-3.1-8B-Instruct`).
-- `--provider`: Provider (`openai`, `google`, `huggingface`).
-- `--prompt`: Path to system prompt file (default: `prompts/gpt_gen_prompt.txt`).
-- `--sample`: Number of posts to sample.
-- `--batch-size`: Number of parallel requests (default: 5).
+### 2. Individual Components
+- **Download Raw Data**:
+  ```bash
+  uv run python -m src.lang_ai.data.downloader
+  ```
+- **Run Preprocessor Only**:
+  ```bash
+  uv run python -m src.lang_ai.data.preprocessor
+  ```
 
 ## Project Structure
 
-- `src/`: Source code directory.
-    - `data_preprocessor.py`: Main preprocessing logic and pipeline definition.
-    - `llm_judge.py`: Infrastructure for LLM-based evaluation.
-    - `models.py`: Pydantic models for structured data.
-    - `similarity_analyser.py`: Text similarity analysis and cluster resolution.
-    - `text_normalizer.py`: Regex-based text normalization.
-    - `download_raw_data.py`: Utilities for downloading data.
-    - `dlm_logger.py`: Logging configuration.
-    - `utils.py`: General utility functions.
-- `run_judge.py`: CLI script to run the LLM judge.
-- `raw_data/`: Directory where raw data is downloaded and extracted.
-- `preprocessed_data/`: Directory where the final cleaned data is saved.
-- `pyproject.toml`: Project dependencies and configuration.
-- `Makefile`: Shortcut commands for project setup and maintenance.
+- `src/lang_ai/`: Core source code.
+    - `data/`: Data handling and transformation.
+        - `downloader.py`: Data ingestion from remote sources.
+        - `preprocessor.py`: Orchestration of the cleaning pipeline.
+        - `normalizer.py`: Text cleaning and tokenization logic.
+        - `filters.py`: Regex patterns for identifying "messy" content.
+    - `judge/`: LLM evaluation logic.
+        - `agent.py`: `pydantic-ai` agent implementation and pipeline.
+    - `analysis/`: Algorithmic data analysis.
+        - `similarity.py`: Jaccard similarity and clustering utilities.
+    - `core/`: Shared infrastructure.
+        - `models.py`: Structured data definitions (Pydantic).
+        - `logger.py`: Logging setup.
+        - `utils.py`: Environment and path utilities.
+- `main.py`: Unified entry point for the end-to-end workflow.
+- `prompts/`: System prompts for the LLM Judge.
+- `raw_data/`: Input data storage.
+- `preprocessed_data/`: Intermediate cleaned data.
+- `results/`: Final output from the LLM Judge.
 
-## Preprocessing Steps Details
+## Preprocessing Pipeline Details
 
-1. **Fix Typo**: Corrects common typos in the dataset headers (e.g., `auhtor_ID` -> `author`).
-2. **Clean Content**: Uses `TextNormalizer` to replace URLs, emails, and other non-stylometric features with tokens like `[URL]`, `[EMAIL]`, etc.
-3. **Remove Duplicates**: Identifies authors who have posted identical content multiple times and removes all their posts to avoid biasing the stylometric analysis.
-4. **Deduplicate Similar Posts**: Uses character n-gram Jaccard similarity to find near-duplicate posts (e.g., viral content or copypasta). 
-    - **Multi-User Clusters**: If the same text is posted by multiple users, all instances are removed as authorship is ambiguous.
-    - **Single-User Clusters**: If a user reposts their own content, only the longest version is kept.
+The `DataPreprocessor` applies the following steps in order:
+
+1.  **Fix Column Typos**: Corrects common errors in raw data headers (e.g., `auhtor_ID` -> `author`).
+2.  **Clean Content**: Normalizes text by replacing identifiers (URLs, Emails, etc.) with tokens like `[URL]`, `[EMAIL]`.
+3.  **Remove Exact Duplicates**: Removes authors with identical posts to prevent stylometric bias.
+4.  **Filter Non-Standard Ratio**: Excludes posts with an excessive ratio of non-alphanumeric characters.
+5.  **Remove Messy Posts**: Uses pattern matching to filter out bot messages, ads, and common noise.
+6.  **Remove Repetitive Wording**: Sanitizes posts where a single word dominates the content ratio.
+7.  **Normalize Post Size**: Enforces length constraints (minimum word count and maximum character count).
+8.  **Deduplicate Similar Posts**: Resolves near-duplicates using Jaccard similarity.
+    - **Cross-user duplicates**: All instances removed (ambiguous authorship).
+    - **Same-user duplicates**: Only the longest version is retained.
+
+## LLM-as-a-Judge
+
+The project features a sophisticated evaluation agent built on **pydantic-ai**.
+
+- **Structured Output**: Returns rich JSON objects containing `judgment`, `classification` (domain and mechanism), and `forensics` (evidence spans).
+- **Multi-Model Support**: Easily switch between OpenAI, Google, and Hugging Face models via environment variables.
+- **Resume Capability**: Automatically skips already processed posts if the process is interrupted.
+- **Logging & Tracing**: Fully instrumented with Logfire for deep visibility into LLM calls and retry logic.
 
 ## License
 

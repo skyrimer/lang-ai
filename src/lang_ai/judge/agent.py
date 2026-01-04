@@ -4,11 +4,11 @@ from typing import Any
 import pandas as pd
 from tqdm.auto import tqdm
 from pydantic_ai import Agent
-from src.models import JudgeResult
+from src.lang_ai.core.models import JudgeResult
 from pydantic_ai.models.huggingface import HuggingFaceModel
 from pydantic_ai.providers.huggingface import HuggingFaceProvider
-from src.utils import get_env_var
-from src.dlm_logger import setup_logging
+from src.lang_ai.core.utils import get_env_var
+from src.lang_ai.core.logger import setup_logging
 
 logger = setup_logging(__name__)
 
