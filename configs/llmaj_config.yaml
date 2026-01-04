@@ -1,0 +1,20 @@
+# Configuration for LLM Judge Pipeline
+
+# Sampling configuration
+sample:
+  input: "preprocessed_data/preprocessed_data.csv"
+  output: "preprocessed_data/sample_5000.csv"
+  random_seed: 42
+  n: 5000
+
+# Multi-judge configuration (used by main.py and run_multi_judge.py)
+multi_judge:
+  input: "preprocessed_data/sample_5000.csv"
+  system_prompt: "prompts/llmaj_prompt_by_grazie"
+  results_dir: "results"
+  models:
+    - "huggingface:openai/gpt-oss-120b:novita"
+    - "huggingface:Qwen/Qwen3-235B-A22B-Instruct-2507:together"
+    - "huggingface:deepseek-ai/DeepSeek-V3.2:novita"
+    - "huggingface:MiniMaxAI/MiniMax-M2.1:novita"
+    - "huggingface:zai-org/GLM-4.7:novita"

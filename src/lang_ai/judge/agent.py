@@ -1,6 +1,5 @@
 from pathlib import Path
 from typing import Any
-
 import pandas as pd
 from tqdm.auto import tqdm
 from pydantic_ai import Agent
@@ -9,8 +8,32 @@ from pydantic_ai.models.huggingface import HuggingFaceModel
 from pydantic_ai.providers.huggingface import HuggingFaceProvider
 from src.lang_ai.core.utils import get_env_var
 from src.lang_ai.core.logger import setup_logging
+import logging
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception,
+    before_sleep_log,
+)
+from pydantic_ai.exceptions import ModelHTTPError
+import logfire
 
+logfire.configure()
+logfire.instrument_pydantic_ai()
 logger = setup_logging(__name__)
+
+
+def is_retryable_error(exception: Exception) -> bool:
+    """Check if the error is retryable (402, 429, 5xx)."""
+    match exception:
+        case ModelHTTPError():
+            return (
+                exception.status_code in {402, 429}
+                or 500 <= exception.status_code < 600
+            )
+        case _:
+            return False
 
 
 class LLMJudgeAgent(Agent):
@@ -20,7 +43,7 @@ class LLMJudgeAgent(Agent):
         self,
         model: str,
         system_prompt_path: str | Path = "",
-        output_retries: int = 2,
+        output_retries: int = 1,
         **kwargs: Any,
     ) -> None:
         """
@@ -29,7 +52,7 @@ class LLMJudgeAgent(Agent):
         Args:
             model (str): Model name or alias.
             system_prompt_path (str | Path): Path to the system prompt text file. Defaults to "".
-            output_retries (int): Number of retries for output generation. Defaults to 2.
+            output_retries (int): Number of retries for output generation. Defaults to 1.
             **kwargs (Any): Additional arguments passed to Agent.__init__.
         """
         super().__init__(
@@ -58,10 +81,11 @@ class LLMJudgeAgent(Agent):
             if len(parts) >= 2:
                 model_provider = parts[-1]
                 model_name = ":".join(parts[:-1])
+                print(get_env_var("HF_TOKEN"))
                 return HuggingFaceModel(
                     model_name,
                     provider=HuggingFaceProvider(
-                        api_key=get_env_var("HF_API_KEY"), provider_name=model_provider
+                        api_key=get_env_var("HF_TOKEN"), provider_name=model_provider
                     ),
                 )
         return model
@@ -90,7 +114,14 @@ class LLMJudgeAgent(Agent):
 
         return path.read_text(encoding="utf-8")
 
-    async def judge(self, text: str) -> JudgeResult:
+    @retry(
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(multiplier=2, min=5, max=300),
+        retry=retry_if_exception(is_retryable_error),
+        before_sleep=before_sleep_log(logger, logging.WARNING),
+        reraise=True,
+    )
+    def judge(self, text: str) -> JudgeResult:
         """
         Judges a single text post for data leakage.
 
@@ -100,7 +131,7 @@ class LLMJudgeAgent(Agent):
         Returns:
             JudgeResult: The result of the evaluation.
         """
-        result = await self.run(text)
+        result = self.run_sync(text)
         return result.output
 
 
@@ -137,7 +168,7 @@ def save_judge_results(
     logger.info(f"Results appended to {output_path}")
 
 
-async def run_judge_pipeline(
+def run_judge_pipeline(
     input_csv: str | Path,
     output_csv: str | Path,
     model: str,
@@ -162,32 +193,71 @@ async def run_judge_pipeline(
         return
 
     df = pd.read_csv(input_csv)
-    logger.info(f"Loaded {len(df)} rows from {input_csv}")
+
+    logger.info(f"Loaded {len(df)} unique rows from {input_csv}")
 
     processed_texts = set()
     if output_csv.exists():
-        try:
-            existing_df = pd.read_csv(output_csv)
-            if text_column in existing_df.columns:
-                processed_texts = set(existing_df[text_column].astype(str).tolist())
-                logger.info(f"Found {len(processed_texts)} already processed rows.")
-        except Exception as e:
-            logger.warning(f"Could not read existing output file: {e}. Starting fresh.")
+        processed_df = pd.read_csv(output_csv)
+        processed_texts = set(processed_df[text_column].astype(str).tolist())
+        logger.info(f"Found {len(processed_texts)} already processed rows.")
+
+    # Filter out already processed rows
+    df = df[~df[text_column].astype(str).isin(processed_texts)]
+    logger.info(f"Remaining rows to process: {len(df)}")
+
+    if df.empty:
+        logger.info("No new posts to judge.")
+        return
 
     agent = LLMJudgeAgent(model=model, system_prompt_path=system_prompt_path)
 
-    for i, row in tqdm(df.iterrows(), total=len(df), desc="Judging posts"):
+    for _, row in tqdm(df.iterrows(), total=len(df), desc=f"Judging posts ({model})"):
         text = str(row[text_column])
+        result = agent.judge(text)
+        save_judge_results(result, row, output_csv)
 
-        if text in processed_texts:
-            continue
+    logger.info(f"Pipeline completed for model: {model}")
 
-        try:
-            result = await agent.judge(text)
-            save_judge_results(result, row, output_csv)
-            processed_texts.add(text)
-        except Exception as e:
-            logger.error(f"Error judging row {i}: {e}")
-            continue
 
-    logger.info("Pipeline completed.")
+def run_multi_judge(
+    input_csv: str | Path,
+    models: list[str],
+    system_prompt_path: str | Path,
+    results_dir: str | Path,
+) -> None:
+    """
+    Runs multiple LLM judges on the same input dataset.
+
+    Args:
+        input_csv: Path to the input CSV file.
+        models: List of model names/aliases.
+        system_prompt_path: Path to the system prompt file.
+        results_dir: Directory where individual model results will be saved.
+    """
+    results_dir = Path(results_dir)
+    results_dir.mkdir(parents=True, exist_ok=True)
+
+    input_csv = Path(input_csv)
+    if not input_csv.exists():
+        logger.error(f"Input file not found: {input_csv}")
+        return
+
+    for model in models:
+        # Sanitize model name for filename
+        sanitized_model = (
+            str(model).replace(":", "_").replace("/", "_").replace("\\", "_")
+        )
+        output_csv = results_dir / f"judge_results_{sanitized_model}.csv"
+
+        logger.info(f"Starting judge pipeline with model: {model}")
+        logger.info(f"Results will be saved to: {output_csv}")
+
+        run_judge_pipeline(
+            input_csv=input_csv,
+            output_csv=output_csv,
+            model=model,
+            system_prompt_path=system_prompt_path,
+        )
+
+    logger.info("All models processed.")

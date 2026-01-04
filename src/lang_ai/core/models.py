@@ -13,8 +13,8 @@ class Judgment(BaseModel):
 
 
 class Classification(BaseModel):
-    leakage_domain: Literal["Semantic", "Orthographic", "Syntactic", "Structural"] = Field(
-        ..., description="The domain of the leakage"
+    leakage_domain: Literal["Semantic", "Orthographic", "Syntactic", "Structural"] = (
+        Field(..., description="The domain of the leakage")
     )
     specific_mechanism: str = Field(
         ..., description="The specific mechanism of the leakage"
@@ -29,8 +29,8 @@ class Forensics(BaseModel):
     evidence_spans: list[str] = Field(
         ..., description="List of exact strings that constitute evidence"
     )
-    evidence_location: Literal["Beginning", "Middle", "End", "Scattered", "N/A"] = Field(
-        ..., description="Location of the evidence in the text"
+    evidence_location: Literal["Beginning", "Middle", "End", "Scattered", "N/A"] = (
+        Field(..., description="Location of the evidence in the text")
     )
     pattern_abstraction: str = Field(
         ..., description="Technical description of the pattern logic"

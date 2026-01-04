@@ -56,10 +56,16 @@ This project uses `uv` for lightning-fast dependency management.
 
 ## Usage
 
+The project uses **Hydra** for configuration management. All parameters are defined in `configs/llmaj_config.yaml` and can be overridden via command-line arguments.
+
 ### 1. Run the Full Pipeline
-The easiest way to run both preprocessing and the LLM judge is through `main.py`:
+The easiest way to run both preprocessing and the LLM judge for a set of models is through `main.py`:
 ```bash
 uv run main.py
+```
+To override the models or sample size:
+```bash
+uv run main.py 'multi_judge.models=[openai:gpt-4o]' multi_judge.sample=500
 ```
 
 ### 2. Individual Components
@@ -71,6 +77,22 @@ uv run main.py
   ```bash
   uv run python -m src.lang_ai.data.preprocessor
   ```
+- **Sample Posts**:
+  Sample a subset of posts for later evaluation:
+  ```bash
+  uv run python sample_posts.py sample.n=5000
+  ```
+
+- **Run Multiple Judges**:
+  Run multiple LLM models on a specific dataset (e.g., a sample):
+  ```bash
+  uv run python run_multi_judge.py multi_judge.input=preprocessed_data/sample_5000.csv
+  ```
+  To override models from the command line:
+  ```bash
+  uv run python run_multi_judge.py 'multi_judge.models=[gpt-4o, huggingface:deepseek-ai/DeepSeek-V3.2:novita]'
+  ```
+  Results for each model will be saved in the `results/` directory as `judge_results_<model_name>.csv`.
 
 ## Project Structure
 

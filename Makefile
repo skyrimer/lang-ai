@@ -1,4 +1,4 @@
-export UV_ENV_FILE := .env
+export UV_ENV_FILE=.env
 
 .PHONY: create-venv remove-venv sync reinstall-project format
 
@@ -19,3 +19,7 @@ format:
 logfire-auth:
 	uv run logfire auth
 	uv run logfire projects use lang-and-ai
+
+debug:
+	@echo "UV_ENV_FILE=$(UV_ENV_FILE)"
+	@echo "UV_NO_ENV_FILE=$(UV_NO_ENV_FILE)"

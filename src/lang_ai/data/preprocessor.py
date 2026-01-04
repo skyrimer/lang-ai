@@ -7,7 +7,10 @@ from pydantic import BaseModel, Field
 from src.lang_ai.core.utils import get_project_root
 from src.lang_ai.core.logger import setup_logging
 from src.lang_ai.data.normalizer import TextNormalizer
-from src.lang_ai.analysis.similarity import SimilarityAnalyzer, resolve_similarity_clusters
+from src.lang_ai.analysis.similarity import (
+    SimilarityAnalyzer,
+    resolve_similarity_clusters,
+)
 from typing import Callable
 from src.lang_ai.data.filters import PollutionFilter
 from collections import Counter
@@ -165,7 +168,9 @@ def non_standard_word_ratio(text: str) -> float:
     return sum(1 for word in words if not word.isalnum()) / len(words)
 
 
-def filter_by_non_standard_ratio(df: pd.DataFrame, threshold: float = 0.4) -> pd.DataFrame:
+def filter_by_non_standard_ratio(
+    df: pd.DataFrame, threshold: float = 0.4
+) -> pd.DataFrame:
     """
     Filters the DataFrame for posts that have a non-standard word ratio less than the threshold.
 
@@ -186,7 +191,9 @@ def filter_by_non_standard_ratio(df: pd.DataFrame, threshold: float = 0.4) -> pd
     )
 
 
-def remove_common_word_by_ratio(df: pd.DataFrame, threshold: float = 0.3) -> pd.DataFrame:
+def remove_common_word_by_ratio(
+    df: pd.DataFrame, threshold: float = 0.3
+) -> pd.DataFrame:
     """
     Removes the most common word from posts where its ratio exceeds the threshold.
 

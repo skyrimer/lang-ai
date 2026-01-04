@@ -1,38 +1,29 @@
-import asyncio
-import logfire
+import hydra
+from omegaconf import DictConfig
 from src.lang_ai.data.preprocessor import preprocess_data
-from src.lang_ai.judge.agent import run_judge_pipeline
-from src.lang_ai.core.utils import get_env_var
-# Configure logfire
-logfire.configure()
-logfire.instrument_pydantic_ai()
+from src.lang_ai.judge.agent import run_multi_judge
 
 
-async def run_pipeline() -> None:
+def run_pipeline(cfg: DictConfig) -> None:
     """
     Main entry point for the lang-ai project.
-    Runs the full data preprocessing and judge pipeline.
+    Runs the full data preprocessing and multi-model judge pipeline.
     """
     # 1. Preprocess data (optional, can be skipped if already exists)
     preprocess_data()
 
-    # 2. Run LLM Judge
-    model = get_env_var("LLM_MODEL")
-    system_prompt = "prompts/llmaj_prompt_by_grazie"
-    input_csv = "preprocessed_data/preprocessed_data.csv"
-    output_csv = "results/judge_results.csv"
-
-    print(f"Starting judge pipeline with model: {model}")
-    await run_judge_pipeline(
-        input_csv=input_csv,
-        output_csv=output_csv,
-        model=model,
-        system_prompt_path=system_prompt,
+    # 2. Run LLM Judges
+    run_multi_judge(
+        input_csv=cfg.multi_judge.input,
+        models=cfg.multi_judge.models,
+        system_prompt_path=cfg.multi_judge.system_prompt,
+        results_dir=cfg.multi_judge.results_dir,
     )
 
 
-def main() -> None:
-    asyncio.run(run_pipeline())
+@hydra.main(config_path="configs", config_name="llmaj_config", version_base=None)
+def main(cfg: DictConfig) -> None:
+    run_pipeline(cfg)
 
 
 if __name__ == "__main__":
