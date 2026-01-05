@@ -1,10 +1,12 @@
-import pandas as pd
-from tqdm.auto import tqdm
-from pydantic import BaseModel, Field
 from typing import Literal
+
+import pandas as pd
+from pydantic import BaseModel, Field
+from tqdm.auto import tqdm
+
 from src.lang_ai.core.logger import setup_logging
 
-logger = setup_logging()
+logger = setup_logging(__name__)
 
 
 class PollutionFilter(BaseModel):

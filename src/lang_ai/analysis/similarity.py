@@ -1,14 +1,16 @@
 from typing import Any
-import pandas as pd
+
 import numpy as np
+import pandas as pd
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import connected_components
 from sklearn.feature_extraction.text import CountVectorizer
-from pydantic import BaseModel, ConfigDict, PrivateAttr, Field
-from src.lang_ai.core.logger import setup_logging
 from tqdm.auto import tqdm
 
-logger = setup_logging()
+from src.lang_ai.core.logger import setup_logging
+
+logger = setup_logging(__name__)
 
 
 class SimilarityAnalyzer(BaseModel):

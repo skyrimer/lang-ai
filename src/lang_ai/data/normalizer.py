@@ -1,7 +1,8 @@
-from pydantic import BaseModel
-import re
 import html
+import re
 import unicodedata
+
+from pydantic import BaseModel
 
 # ----------------------------
 # URL (Django URLValidator core pieces)

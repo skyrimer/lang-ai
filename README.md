@@ -4,11 +4,10 @@ A Python project for stylometric analysis, data preprocessing, and LLM-based eva
 
 ## Project Overview
 
-This project provides a robust pipeline for downloading, cleaning, and preprocessing text data (specifically Reddit posts) to prepare it for stylometric analysis. It includes advanced features for text normalization, multi-stage filtering, similarity-based deduplication, and an LLM-as-a-Judge infrastructure for data leakage detection.
+This project provides a robust pipeline for cleaning and preprocessing text data (specifically Reddit posts) to prepare it for stylometric analysis. It includes advanced features for text normalization, multi-stage filtering, similarity-based deduplication, and an LLM-as-a-Judge infrastructure for data leakage detection.
 
 ## Key Features
 
-- **Automated Data Management**: Streamlined downloading and extraction of raw data from SurfDrive.
 - **Advanced Text Normalization**: High-precision regex-based replacement of non-stylometric elements (URLs, emails, user mentions, IP addresses) with standardized tokens.
 - **Multi-Stage Preprocessing Pipeline**: A configurable pipeline that includes:
     - Typo correction in headers.
@@ -34,22 +33,25 @@ This project uses `uv` for lightning-fast dependency management.
 2. **Set up the environment**:
    Create a `.env` file in the root directory and add the required environment variables:
    ```env
-   # Data Source
-   SURFDRIVE_LINK=<your-surfdrive-link>
-   SURFDRIVE_PASSWORD=<your-surfdrive-password>
-
    # LLM Judge Configuration
    LLM_MODEL=openai:gpt-4o-mini  # or huggingface:model_name:provider
    OPENAI_API_KEY=<your-openai-key>
    HF_API_KEY=<your-huggingface-key>
    ```
 
-3. **Install dependencies**:
+3. **Prepare the data**:
+   Place the `political_leaning.csv` dataset in the `raw_data/assignment_data/` directory:
+   ```bash
+   mkdir -p raw_data/assignment_data
+   # Move your political_leaning.csv there
+   ```
+
+4. **Install dependencies**:
    ```bash
    make sync
    ```
 
-4. **Configure Observability (Optional)**:
+5. **Configure Observability (Optional)**:
    ```bash
    make logfire-auth
    ```
@@ -69,10 +71,6 @@ uv run main.py 'multi_judge.models=[openai:gpt-4o]' multi_judge.sample=500
 ```
 
 ### 2. Individual Components
-- **Download Raw Data**:
-  ```bash
-  uv run python -m src.lang_ai.data.downloader
-  ```
 - **Run Preprocessor Only**:
   ```bash
   uv run python -m src.lang_ai.data.preprocessor
@@ -92,13 +90,12 @@ uv run main.py 'multi_judge.models=[openai:gpt-4o]' multi_judge.sample=500
   ```bash
   uv run python run_multi_judge.py 'multi_judge.models=[gpt-4o, huggingface:deepseek-ai/DeepSeek-V3.2:novita]'
   ```
-  Results for each model will be saved in the `results/` directory as `judge_results_<model_name>.csv`.
+  Results for each model will be saved in the `results/` directory as `judge_results_<model_name>_<input_dataset_filename>.csv`.
 
 ## Project Structure
 
 - `src/lang_ai/`: Core source code.
     - `data/`: Data handling and transformation.
-        - `downloader.py`: Data ingestion from remote sources.
         - `preprocessor.py`: Orchestration of the cleaning pipeline.
         - `normalizer.py`: Text cleaning and tokenization logic.
         - `filters.py`: Regex patterns for identifying "messy" content.
@@ -112,7 +109,7 @@ uv run main.py 'multi_judge.models=[openai:gpt-4o]' multi_judge.sample=500
         - `utils.py`: Environment and path utilities.
 - `main.py`: Unified entry point for the end-to-end workflow.
 - `prompts/`: System prompts for the LLM Judge.
-- `raw_data/`: Input data storage.
+- `raw_data/`: Input data storage (expects `assignment_data/political_leaning.csv`).
 - `preprocessed_data/`: Intermediate cleaned data.
 - `results/`: Final output from the LLM Judge.
 

@@ -1,7 +1,8 @@
+import sys
+from pathlib import Path
+
 import hydra
 from omegaconf import DictConfig
-from pathlib import Path
-import sys
 
 # Add src to sys.path to allow imports if running as a script
 sys.path.append(str(Path(__file__).parent))

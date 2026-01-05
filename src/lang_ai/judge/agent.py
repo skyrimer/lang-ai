@@ -1,23 +1,32 @@
+import logging
 from pathlib import Path
 from typing import Any
+
+import logfire
 import pandas as pd
-from tqdm.auto import tqdm
 from pydantic_ai import Agent
-from src.lang_ai.core.models import JudgeResult
+from pydantic_ai.exceptions import ModelHTTPError
+from pydantic_ai.models import Model
+from pydantic_ai.models.cerebras import CerebrasModel
+from pydantic_ai.models.groq import GroqModel
 from pydantic_ai.models.huggingface import HuggingFaceModel
+from pydantic_ai.models.openrouter import OpenRouterModel
+from pydantic_ai.providers.cerebras import CerebrasProvider
+from pydantic_ai.providers.groq import GroqProvider
 from pydantic_ai.providers.huggingface import HuggingFaceProvider
-from src.lang_ai.core.utils import get_env_var
-from src.lang_ai.core.logger import setup_logging
-import logging
+from pydantic_ai.providers.openrouter import OpenRouterProvider
 from tenacity import (
+    before_sleep_log,
     retry,
+    retry_if_exception,
     stop_after_attempt,
     wait_exponential,
-    retry_if_exception,
-    before_sleep_log,
 )
-from pydantic_ai.exceptions import ModelHTTPError
-import logfire
+from tqdm.auto import tqdm
+
+from src.lang_ai.core.logger import setup_logging
+from src.lang_ai.core.models import JudgeResult
+from src.lang_ai.core.utils import get_env_var
 
 logfire.configure()
 logfire.instrument_pydantic_ai()
@@ -43,7 +52,7 @@ class LLMJudgeAgent(Agent):
         self,
         model: str,
         system_prompt_path: str | Path = "",
-        output_retries: int = 1,
+        output_retries: int = 3,
         **kwargs: Any,
     ) -> None:
         """
@@ -62,9 +71,10 @@ class LLMJudgeAgent(Agent):
             output_retries=output_retries,
             **kwargs,
         )
+        self.model_name = self.model.model_name
 
     @staticmethod
-    def _load_model(model: str) -> HuggingFaceModel | str:
+    def _load_model(model: str) -> Model | str:
         """
         Loads the model based on the provided model name or alias.
 
@@ -72,23 +82,40 @@ class LLMJudgeAgent(Agent):
             model (str): The model name or alias (e.g., 'huggingface:model:provider').
 
         Returns:
-            HuggingFaceModel | str: The loaded model object or the model name string.
+            Model | str: The loaded model object or the model name string.
         """
-        hf_alias = "huggingface:"
-        if model.startswith(hf_alias):
-            # Format: huggingface:model_name:provider
-            parts = model[len(hf_alias) :].split(":")
-            if len(parts) >= 2:
-                model_provider = parts[-1]
-                model_name = ":".join(parts[:-1])
-                print(get_env_var("HF_TOKEN"))
+        split = model.split(":", 1)
+        if len(split) == 1:
+            return model
+        prefix, model_name = split
+        match prefix:
+            case "huggingface":
+                model_name, provider = model_name.split(":", 1)
                 return HuggingFaceModel(
                     model_name,
                     provider=HuggingFaceProvider(
-                        api_key=get_env_var("HF_TOKEN"), provider_name=model_provider
+                        api_key=get_env_var("HF_TOKEN"), provider_name=provider
                     ),
                 )
-        return model
+            case "cerebras":
+                return CerebrasModel(
+                    model_name,
+                    provider=CerebrasProvider(api_key=get_env_var("CEREBRAS_API_KEY")),
+                )
+            case "groq":
+                return GroqModel(
+                    model_name,
+                    provider=GroqProvider(api_key=get_env_var("GROQ_API_KEY")),
+                )
+            case "openrouter":
+                return OpenRouterModel(
+                    model_name,
+                    provider=OpenRouterProvider(
+                        api_key=get_env_var("OPENROUTER_API_KEY")
+                    ),
+                )
+            case _:
+                return model
 
     @staticmethod
     def _load_system_prompt(path: str | Path = "") -> str:
@@ -170,7 +197,7 @@ def save_judge_results(
 
 def run_judge_pipeline(
     input_csv: str | Path,
-    output_csv: str | Path,
+    results_dir: str | Path,
     model: str,
     system_prompt_path: str | Path,
     text_column: str = "post",
@@ -180,13 +207,19 @@ def run_judge_pipeline(
 
     Args:
         input_csv (str | Path): Path to the input preprocessed dataset CSV.
-        output_csv (str | Path): Path where the results CSV should be saved.
+        results_dir (str | Path): Directory where model results will be saved.
         model (str): Model name or alias to use for judging.
         system_prompt_path (str | Path): Path to the system prompt file.
         text_column (str): The name of the column containing the text to judge. Defaults to "post".
     """
+    agent = LLMJudgeAgent(model=model, system_prompt_path=system_prompt_path)
+
     input_csv = Path(input_csv)
-    output_csv = Path(output_csv)
+    sanitized_model = (
+            str(agent.model_name).replace(":", "_").replace("/", "_").replace("\\", "_")
+        )
+    output_csv = Path(results_dir) / f"judge_results_{sanitized_model}_{input_csv.stem}.csv"
+    logger.info(f"Saving results to {output_csv}")
 
     if not input_csv.exists():
         logger.error(f"Input file not found: {input_csv}")
@@ -209,8 +242,6 @@ def run_judge_pipeline(
     if df.empty:
         logger.info("No new posts to judge.")
         return
-
-    agent = LLMJudgeAgent(model=model, system_prompt_path=system_prompt_path)
 
     for _, row in tqdm(df.iterrows(), total=len(df), desc=f"Judging posts ({model})"):
         text = str(row[text_column])
@@ -244,18 +275,10 @@ def run_multi_judge(
         return
 
     for model in models:
-        # Sanitize model name for filename
-        sanitized_model = (
-            str(model).replace(":", "_").replace("/", "_").replace("\\", "_")
-        )
-        output_csv = results_dir / f"judge_results_{sanitized_model}.csv"
-
         logger.info(f"Starting judge pipeline with model: {model}")
-        logger.info(f"Results will be saved to: {output_csv}")
-
         run_judge_pipeline(
             input_csv=input_csv,
-            output_csv=output_csv,
+            results_dir=results_dir,
             model=model,
             system_prompt_path=system_prompt_path,
         )
