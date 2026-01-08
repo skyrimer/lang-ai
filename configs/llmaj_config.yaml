@@ -13,15 +13,7 @@ multi_judge:
   system_prompt: "prompts/llmaj_prompt_by_grazie"
   results_dir: "results"
   models:
-#    - "groq:openai/gpt-oss-120b"
-
-    - "cerebras:gpt-oss-120b"
-    - "cerebras:qwen-3-235b-a22b-instruct-2507"
-#
-#    - "openrouter:gpt-oss-120b:free"
-#    - "openrouter:qwen/qwen3-235b-a22b-2507"
-#    - "openrouter:deepseek/deepseek-v3.2"
-
-#    - "huggingface:openai/gpt-oss-120b:novita"
-#    - "huggingface:Qwen/Qwen3-235B-A22B-Instruct-2507:together"
-#    - "huggingface:deepseek-ai/DeepSeek-V3.2:novita"
+    - "openrouter:xiaomi/mimo-v2-flash:free"
+    - "openrouter:deepseek/deepseek-r1-0528:free"
+    - "openrouter:openai/gpt-oss-120b:free"
+    - "openrouter:qwen/qwen3-235b-a22b-2507"

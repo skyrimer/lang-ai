@@ -216,9 +216,11 @@ def run_judge_pipeline(
 
     input_csv = Path(input_csv)
     sanitized_model = (
-            str(agent.model_name).replace(":", "_").replace("/", "_").replace("\\", "_")
-        )
-    output_csv = Path(results_dir) / f"judge_results_{sanitized_model}_{input_csv.stem}.csv"
+        str(agent.model_name).replace(":", "_").replace("/", "_").replace("\\", "_")
+    )
+    output_csv = (
+        Path(results_dir) / f"judge_results_{sanitized_model}_{input_csv.stem}.csv"
+    )
     logger.info(f"Saving results to {output_csv}")
 
     if not input_csv.exists():
