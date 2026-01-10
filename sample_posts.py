@@ -10,11 +10,9 @@ from src.lang_ai.core.logger import setup_logging
 logger = setup_logging(__name__)
 
 
-def sample_posts(
-    input_path: str, output_path: str, n: int = 5000, random_seed: int = 42
-):
-    input_path = Path(input_path)
-    output_path = Path(output_path)
+def sample_posts(inp_path: str, otp_path: str, n: int = 5000, random_seed: int = 42):
+    input_path = Path(inp_path)
+    output_path = Path(otp_path)
 
     if not input_path.exists():
         logger.error(f"Input file {input_path} not found.")

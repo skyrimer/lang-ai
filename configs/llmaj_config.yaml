@@ -13,7 +13,14 @@ multi_judge:
   system_prompt: "prompts/llmaj_prompt_by_grazie"
   results_dir: "results"
   models:
+    - "openrouter:x-ai/grok-4.1-fast"
+    - "openrouter:google/gemini-3-flash-preview"
     - "openrouter:xiaomi/mimo-v2-flash:free"
-    - "openrouter:deepseek/deepseek-r1-0528:free"
-    - "openrouter:openai/gpt-oss-120b:free"
+    - "openrouter:openai/gpt-oss-120b"
     - "openrouter:qwen/qwen3-235b-a22b-2507"
+
+# Analysis configuration
+analysis:
+  results_dir: "results"
+  dataset_name: "sample_500"
+  disagreement_n: 25

@@ -11,6 +11,7 @@ from pydantic_ai.models.cerebras import CerebrasModel
 from pydantic_ai.models.groq import GroqModel
 from pydantic_ai.models.huggingface import HuggingFaceModel
 from pydantic_ai.models.openrouter import OpenRouterModel
+from pydantic_ai.profiles.openai import OpenAIModelProfile
 from pydantic_ai.providers.cerebras import CerebrasProvider
 from pydantic_ai.providers.groq import GroqProvider
 from pydantic_ai.providers.huggingface import HuggingFaceProvider
@@ -52,7 +53,7 @@ class LLMJudgeAgent(Agent):
         self,
         model: str,
         system_prompt_path: str | Path = "",
-        output_retries: int = 3,
+        output_retries: int = 5,
         **kwargs: Any,
     ) -> None:
         """
@@ -61,7 +62,7 @@ class LLMJudgeAgent(Agent):
         Args:
             model (str): Model name or alias.
             system_prompt_path (str | Path): Path to the system prompt text file. Defaults to "".
-            output_retries (int): Number of retries for output generation. Defaults to 1.
+            output_retries (int): Number of retries for output generation. Defaults to 5.
             **kwargs (Any): Additional arguments passed to Agent.__init__.
         """
         super().__init__(
@@ -108,12 +109,21 @@ class LLMJudgeAgent(Agent):
                     provider=GroqProvider(api_key=get_env_var("GROQ_API_KEY")),
                 )
             case "openrouter":
-                return OpenRouterModel(
-                    model_name,
-                    provider=OpenRouterProvider(
-                        api_key=get_env_var("OPENROUTER_API_KEY")
-                    ),
-                )
+                provider = OpenRouterProvider(api_key=get_env_var("OPENROUTER_API_KEY"))
+                profile = provider.model_profile(model_name)
+
+                if isinstance(profile, OpenAIModelProfile):
+                    # OpenRouter providers often don't support tool_choice='required'
+                    # profile.openai_supports_tool_choice_required = False
+
+                    # For 'free' models, using 'prompted' mode is often more robust than tool calling
+                    # as many free providers on OpenRouter don't support tools at all.
+                    if ":free" in model_name:
+                        profile.supports_tools = False
+                        profile.default_structured_output_mode = "prompted"
+                return OpenRouterModel(model_name, provider=provider, profile=profile)
+
+                # return OpenRouterModel(model_name, provider=provider)
             case _:
                 return model
 

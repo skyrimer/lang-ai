@@ -1,11 +1,5 @@
-import sys
-from pathlib import Path
-
 import hydra
 from omegaconf import DictConfig
-
-# Add src to sys.path to allow imports if running as a script
-sys.path.append(str(Path(__file__).parent))
 
 from src.lang_ai.judge.agent import run_multi_judge
 

@@ -14,9 +14,9 @@ class Judgment(BaseModel):
 
 
 class Classification(BaseModel):
-    leakage_domain: Literal["Semantic", "Orthographic", "Syntactic", "Structural"] = (
-        Field(..., description="The domain of the leakage")
-    )
+    leakage_domain: Literal[
+        "Semantic", "Orthographic", "Syntactic", "Structural", "N/A"
+    ] = Field(..., description="The domain of the leakage")
     specific_mechanism: str = Field(
         ..., description="The specific mechanism of the leakage"
     )
@@ -48,3 +48,9 @@ class JudgeResult(BaseModel):
         ...,
         description="Forensic analysis of the leakage (only present if is_leaky=true)",
     )
+
+
+class JudgeEvaluation(BaseModel):
+    judge_id: str = Field(..., description="Unique identifier for the judge")
+    judge_results: list[JudgeResult] = Field(..., description="Results from the judge")
+    posts: list[str] = Field(..., description="Posts that were judged")

@@ -58,6 +58,23 @@ This project uses `uv` for lightning-fast dependency management.
 
 ## Usage
 
+### Analysis and Labeling
+
+1. Run the analysis to generate disagreement samples:
+   ```bash
+   uv run run_analysis.py
+   ```
+
+2. Label the disagreement samples using the Streamlit app:
+   ```bash
+   uv run streamlit run src/lang_ai/judge/labeling_app.py
+   ```
+
+3. Re-run the analysis to use the golden labels:
+   ```bash
+   uv run run_analysis.py
+   ```
+
 The project uses **Hydra** for configuration management. All parameters are defined in `configs/llmaj_config.yaml` and can be overridden via command-line arguments.
 
 ### 1. Run the Full Pipeline
