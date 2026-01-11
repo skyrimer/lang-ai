@@ -7,7 +7,7 @@ requires-python = ">=3.13"
 dependencies = [
     "pandas>=2.3.3",
     "pydantic>=2.12.5",
-    "pydantic-ai-slim[gemini,logfire,openai,openrouter]>=1.39.0",
+    "pydantic-ai-slim[google,groq,huggingface,logfire,openai,openrouter]>=1.39.0",
     "requests>=2.32.5",
     "scikit-learn>=1.8.0",
     "tqdm>=4.67.1",

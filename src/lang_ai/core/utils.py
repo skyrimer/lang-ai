@@ -1,3 +1,7 @@
+"""
+Core utility functions for the lang-ai project.
+"""
+
 import os
 from pathlib import Path
 

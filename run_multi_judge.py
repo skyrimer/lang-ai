@@ -1,3 +1,7 @@
+"""
+Script to run multiple LLM Judges on a dataset.
+"""
+
 import hydra
 from omegaconf import DictConfig
 
@@ -5,7 +9,7 @@ from src.lang_ai.judge.agent import run_multi_judge
 
 
 @hydra.main(config_path="configs", config_name="llmaj_config", version_base=None)
-def main(cfg: DictConfig):
+def main(cfg: DictConfig) -> None:
     run_multi_judge(
         input_csv=cfg.multi_judge.input,
         models=cfg.multi_judge.models,

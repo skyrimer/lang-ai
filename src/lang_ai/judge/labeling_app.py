@@ -1,3 +1,8 @@
+"""
+Streamlit application for manual labeling of disagreement samples between LLM Judges.
+Used to create 'golden labels' for evaluation.
+"""
+
 import glob
 import os
 

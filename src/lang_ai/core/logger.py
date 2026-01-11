@@ -1,3 +1,7 @@
+"""
+Logging utility for the lang-ai project.
+"""
+
 import logging
 import sys
 

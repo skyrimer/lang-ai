@@ -1,3 +1,8 @@
+"""
+Analysis tools for evaluating and comparing LLM Judge results.
+Includes Dawid-Skene truth estimation, Krippendorff's Alpha, Brier scores, and bootstrapping.
+"""
+
 import ast
 import glob
 import os
@@ -5,6 +10,9 @@ from typing import Any, Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
+from rich.console import Console
+from rich.table import Table
+from tqdm.auto import tqdm
 
 from src.lang_ai.core.logger import setup_logging
 from src.lang_ai.core.models import (
@@ -70,7 +78,7 @@ class JudgeEvaluator:
         if not self.judges:
             return [], {}
 
-        # 1. Initialize Votes Matrix (Judges x Posts)
+        # Initialize Votes Matrix (Judges x Posts)
         # 0 = Safe, 1 = Leaky, -1 = Invalid/Missing
         votes = np.full((self.num_judges, self.num_posts), -1)
         judge_ids = [j.judge_id for j in self.judges]
@@ -85,7 +93,7 @@ class JudgeEvaluator:
                     # (We penalize the judge for this later in ranking, but don't let it skew truth)
                     votes[j_idx, p_idx] = -1
 
-        # 2. Initialize priors (Simple Majority)
+        # Initialize priors (Simple Majority)
         valid_votes_mask = votes != -1
         if not np.any(valid_votes_mask):
             return [False] * self.num_posts, {jid: 0.0 for jid in judge_ids}
@@ -100,7 +108,7 @@ class JudgeEvaluator:
         # Error rates: [Judge, True_Class(0,1), Pred_Class(0,1)]
         error_rates = np.zeros((self.num_judges, 2, 2))
 
-        # 3. EM Loop
+        # EM Loop
         for _ in range(max_iter):
             old_class_marginals = class_marginals.copy()
 
@@ -185,7 +193,7 @@ class JudgeEvaluator:
         ]
 
         # Add Golden metrics if available
-        golden_cols = ["Golden F1"]
+        golden_cols = ["Golden Recall", "Golden F1"]
         if any(col in df.columns for col in golden_cols):
             # Only include columns that were actually calculated
             available_golden = [col for col in golden_cols if col in df.columns]
@@ -227,17 +235,15 @@ class JudgeEvaluator:
                     is_leaky_vote = result.judgment.is_leaky
                     is_correct = is_leaky_vote == silver_is_leaky
 
-                # 2. Brier Score (Calibration)
+                # Brier Score (Calibration)
                 # If hallucination, we assume they were confident but wrong.
                 metrics["brier_sum"] += self._calculate_brier_score(
                     result.judgment.confidence, is_correct
                 )
 
-                # 3. Golden Set Metrics
+                # Golden Set Metrics
                 if post in self.golden_labels:
                     golden_is_leaky = self.golden_labels[post] == "LEAKY"
-                    # We use the actual vote here. If it was a hallucination, we still count it as the vote they made.
-                    # Note: Usually hallucinations only happen on LEAKY votes in our current verify_spans.
                     if is_leaky_vote and golden_is_leaky:
                         metrics["golden_tp"] += 1
                     elif is_leaky_vote and not golden_is_leaky:
@@ -284,6 +290,7 @@ class JudgeEvaluator:
 
                 scores.update(
                     {
+                        "Golden Recall": round(g_rec * 100, 2),
                         "Golden F1": round(g_f1 * 100, 2),
                     }
                 )
@@ -390,6 +397,92 @@ class JudgeEvaluator:
         return df.sort_values(by="disagreement_score", ascending=False).head(n)
 
 
+class BootstrapEvaluator:
+    """
+    Wraps JudgeEvaluator to perform resampling (bootstrapping)
+    to calculate Confidence Intervals for metrics.
+    """
+
+    def __init__(
+        self,
+        judges: List[JudgeEvaluation],
+        golden_labels: Dict[str, str] | None = None,
+    ):
+        self.judges = judges
+        self.golden_labels = golden_labels
+        self.num_samples = len(judges[0].posts) if judges else 0
+
+    def run_bootstrap(self, n_iterations: int = 100) -> pd.DataFrame:
+        """
+        Runs the bootstrap process and returns a DataFrame with Mean ± Std.
+        """
+        history = {j.judge_id: {} for j in self.judges}
+        indices = np.arange(self.num_samples)
+
+        logger.info(
+            f"Starting Bootstrap: {n_iterations} iterations on {self.num_samples} samples."
+        )
+
+        for _ in tqdm(range(n_iterations), desc="Bootstrapping"):
+            # Resample indices with replacement
+            resampled_indices = np.random.choice(
+                indices, size=self.num_samples, replace=True
+            )
+
+            # Create temporary Judge objects for this subset
+            subset_judges = []
+            for judge in self.judges:
+                new_posts = [judge.posts[i] for i in resampled_indices]
+                new_results = [judge.judge_results[i] for i in resampled_indices]
+
+                subset_judges.append(
+                    JudgeEvaluation(
+                        judge_id=judge.judge_id,
+                        judge_results=new_results,
+                        posts=new_posts,
+                    )
+                )
+
+            # Run Evaluation on Subset
+            # Note: JudgeEvaluator works fine with resampled lists.
+            # Golden labels dict lookup works automatically since it uses post content as key.
+            evaluator = JudgeEvaluator(subset_judges, golden_labels=self.golden_labels)
+            df_rank = evaluator.rank_judges()
+
+            # Store Metrics
+            for judge_id in df_rank.index:
+                for col in df_rank.columns:
+                    val = df_rank.loc[judge_id, col]
+                    if col not in history[judge_id]:
+                        history[judge_id][col] = []
+                    history[judge_id][col].append(val)
+
+        # Aggregate Results
+        final_data = []
+        for jid, metrics in history.items():
+            row = {"Judge ID": jid}
+            for metric, values in metrics.items():
+                arr = np.array(values)
+                mean = np.mean(arr)
+                std = np.std(arr)
+
+                # Format: "Mean ± Std"
+                row[metric] = f"{mean:.3f} ± {std:.3f}"
+                # Store numeric mean for sorting
+                row[f"_sort_{metric}"] = mean
+            final_data.append(row)
+
+        df = (
+            pd.DataFrame(final_data)
+            .set_index("Judge ID")
+            .sort_values("_sort_DS Reliability", ascending=False)
+        )
+
+        # Clean up sort columns
+        df = df[[c for c in df.columns if not c.startswith("_sort_")]]
+        return df
+
+
 def load_results(results_dir: str, dataset_name: str) -> list[JudgeEvaluation]:
     """
     Loads all judge result CSVs for a given dataset name and filters for common samples.
@@ -429,27 +522,35 @@ def load_results(results_dir: str, dataset_name: str) -> list[JudgeEvaluation]:
                         confidence=row.get("judgment.confidence", "LOW"),
                         severity_score=row.get("judgment.severity_score", "LOW"),
                     ),
-                    classification=Classification(
-                        leakage_domain=row.get("classification.leakage_domain", "N/A"),
-                        specific_mechanism=row.get(
-                            "classification.specific_mechanism", ""
-                        ),
-                        is_novel_category=row.get(
-                            "classification.is_novel_category", False
-                        ),
-                        definition=row.get("classification.definition", ""),
-                    )
-                    if is_leaky
-                    else None,
-                    forensics=Forensics(
-                        evidence_spans=evidence_spans,
-                        evidence_location=row.get("forensics.evidence_location", "N/A"),
-                        pattern_abstraction=row.get(
-                            "forensics.pattern_abstraction", ""
-                        ),
-                    )
-                    if is_leaky
-                    else None,
+                    classification=(
+                        Classification(
+                            leakage_domain=row.get(
+                                "classification.leakage_domain", "N/A"
+                            ),
+                            specific_mechanism=row.get(
+                                "classification.specific_mechanism", ""
+                            ),
+                            is_novel_category=row.get(
+                                "classification.is_novel_category", False
+                            ),
+                            definition=row.get("classification.definition", ""),
+                        )
+                        if is_leaky
+                        else None
+                    ),
+                    forensics=(
+                        Forensics(
+                            evidence_spans=evidence_spans,
+                            evidence_location=row.get(
+                                "forensics.evidence_location", "N/A"
+                            ),
+                            pattern_abstraction=row.get(
+                                "forensics.pattern_abstraction", ""
+                            ),
+                        )
+                        if is_leaky
+                        else None
+                    ),
                 )
             )
         judge_posts = [row["post"] for row in df.to_dict(orient="records")]
@@ -480,6 +581,7 @@ def run_analysis(results_dir: str, dataset_name: str, disagreement_n: int = 10) 
     """
     Main entry point for analyzing LLM Judge results.
     """
+    console = Console()
     logger.info(f"Analyzing results for dataset: {dataset_name}")
 
     judges = load_results(results_dir, dataset_name)
@@ -497,18 +599,37 @@ def run_analysis(results_dir: str, dataset_name: str, disagreement_n: int = 10) 
         golden_labels = dict(zip(golden_df["post"], golden_df["manual_label"]))
         logger.info(f"Loaded {len(golden_labels)} golden labels.")
 
+    # Standard Analysis
     evaluator = JudgeEvaluator(judges, golden_labels=golden_labels)
-
-    # Global Ranking
-    ranking = evaluator.rank_judges()
     alpha = evaluator.calculate_krippendorff_alpha()
+    console.print(
+        f"[bold]Krippendorff's Alpha (Inter-rater Reliability):[/bold] [green]{alpha:.4f}[/green]"
+    )
 
-    print("\n" + "=" * 100)
-    print(f"JUDGE LEADERBOARD: {dataset_name} (Global)")
-    print(f"Krippendorff's Alpha (Inter-rater Reliability): {alpha:.4f}")
-    print("=" * 100)
-    print(ranking.to_string())
-    print("=" * 100)
+    bootstrapper = BootstrapEvaluator(judges, golden_labels=golden_labels)
+    stability_df = bootstrapper.run_bootstrap(n_iterations=100)
+
+    b_table = Table(
+        title="BOOTSTRAP STABILITY ANALYSIS",
+        show_header=True,
+        header_style="bold cyan",
+        title_style="bold underline",
+    )
+    b_table.add_column("Judge ID", style="cyan", no_wrap=True)
+    for col in stability_df.columns:
+        display_name = (
+            col.replace("Reliability", "Rel.")
+            .replace("Brier Score (Calib)", "Brier (Cal)")
+            .replace("Hallucinations", "Halluc.")
+            .replace("Golden", "G.")
+        )
+        style = "green" if "Golden" in col or "Reliability" in col else "white"
+        b_table.add_column(display_name, justify="right", style=style)
+
+    for judge_id, row in stability_df.iterrows():
+        b_table.add_row(str(judge_id), *[str(val) for val in row])
+
+    console.print(b_table)
 
     # Disagreement Analysis
     disagreement_df = evaluator.get_disagreement_samples(n=disagreement_n)

@@ -1,3 +1,8 @@
+"""
+LLM Judge Agent implementation using pydantic-ai.
+This module defines the agent that uses various LLMs to judge data leakage in text posts.
+"""
+
 import logging
 from pathlib import Path
 from typing import Any
@@ -8,11 +13,13 @@ from pydantic_ai import Agent
 from pydantic_ai.exceptions import ModelHTTPError
 from pydantic_ai.models import Model
 from pydantic_ai.models.cerebras import CerebrasModel
+from pydantic_ai.models.google import GoogleModel
 from pydantic_ai.models.groq import GroqModel
 from pydantic_ai.models.huggingface import HuggingFaceModel
 from pydantic_ai.models.openrouter import OpenRouterModel
 from pydantic_ai.profiles.openai import OpenAIModelProfile
 from pydantic_ai.providers.cerebras import CerebrasProvider
+from pydantic_ai.providers.google import GoogleProvider
 from pydantic_ai.providers.groq import GroqProvider
 from pydantic_ai.providers.huggingface import HuggingFaceProvider
 from pydantic_ai.providers.openrouter import OpenRouterProvider
@@ -108,6 +115,11 @@ class LLMJudgeAgent(Agent):
                     model_name,
                     provider=GroqProvider(api_key=get_env_var("GROQ_API_KEY")),
                 )
+            case "google":
+                return GoogleModel(
+                    model_name,
+                    provider=GoogleProvider(api_key=get_env_var("GOOGLE_API_KEY")),
+                )
             case "openrouter":
                 provider = OpenRouterProvider(api_key=get_env_var("OPENROUTER_API_KEY"))
                 profile = provider.model_profile(model_name)
@@ -122,8 +134,6 @@ class LLMJudgeAgent(Agent):
                         profile.supports_tools = False
                         profile.default_structured_output_mode = "prompted"
                 return OpenRouterModel(model_name, provider=provider, profile=profile)
-
-                # return OpenRouterModel(model_name, provider=provider)
             case _:
                 return model
 

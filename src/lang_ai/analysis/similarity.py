@@ -1,3 +1,7 @@
+"""
+Text similarity analysis and clustering using character-level n-grams and Jaccard similarity.
+"""
+
 from typing import Any
 
 import numpy as np

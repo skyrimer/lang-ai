@@ -1,9 +1,17 @@
+"""
+Data models for the LLM Judge project.
+"""
+
 from typing import Literal
 
 from pydantic import BaseModel, Field
 
 
 class Judgment(BaseModel):
+    """
+    Represents the core judgment of whether a post contains data leakage.
+    """
+
     is_leaky: bool = Field(..., description="Whether the post contains data leakage")
     severity_score: Literal["CRITICAL", "MODERATE", "LOW"] = Field(
         ..., description="Severity score: CRITICAL, MODERATE, or LOW"
@@ -14,6 +22,10 @@ class Judgment(BaseModel):
 
 
 class Classification(BaseModel):
+    """
+    Classification details for a detected data leakage.
+    """
+
     leakage_domain: Literal[
         "Semantic", "Orthographic", "Syntactic", "Structural", "N/A"
     ] = Field(..., description="The domain of the leakage")
@@ -27,6 +39,10 @@ class Classification(BaseModel):
 
 
 class Forensics(BaseModel):
+    """
+    Forensic analysis details for a detected data leakage.
+    """
+
     evidence_spans: list[str] = Field(
         ..., description="List of exact strings that constitute evidence"
     )
@@ -39,6 +55,10 @@ class Forensics(BaseModel):
 
 
 class JudgeResult(BaseModel):
+    """
+    The complete result of a single judge's analysis of a post.
+    """
+
     judgment: Judgment = Field(..., description="The overall judgment")
     classification: Classification | None = Field(
         ...,
@@ -51,6 +71,10 @@ class JudgeResult(BaseModel):
 
 
 class JudgeEvaluation(BaseModel):
+    """
+    Collection of results from a specific judge across multiple posts.
+    """
+
     judge_id: str = Field(..., description="Unique identifier for the judge")
     judge_results: list[JudgeResult] = Field(..., description="Results from the judge")
     posts: list[str] = Field(..., description="Posts that were judged")

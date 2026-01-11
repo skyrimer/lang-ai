@@ -1,3 +1,7 @@
+"""
+Filters for identifying and removing undesirable content (bots, ads, AI-generated) from data.
+"""
+
 from typing import Literal
 
 import pandas as pd

@@ -1,3 +1,7 @@
+"""
+Script to sample a subset of posts from a larger dataset for judging.
+"""
+
 import sys
 from pathlib import Path
 
@@ -10,7 +14,18 @@ from src.lang_ai.core.logger import setup_logging
 logger = setup_logging(__name__)
 
 
-def sample_posts(inp_path: str, otp_path: str, n: int = 5000, random_seed: int = 42):
+def sample_posts(
+    inp_path: str, otp_path: str, n: int = 5000, random_seed: int = 42
+) -> None:
+    """
+    Samples n posts from the input CSV file and saves them to the output CSV file.
+
+    Args:
+        inp_path (str): Path to the input CSV file.
+        otp_path (str): Path to the output CSV file.
+        n (int): Number of posts to sample. Defaults to 5000.
+        random_seed (int): Random seed for reproducibility. Defaults to 42.
+    """
     input_path = Path(inp_path)
     output_path = Path(otp_path)
 
@@ -36,7 +51,7 @@ def sample_posts(inp_path: str, otp_path: str, n: int = 5000, random_seed: int =
 
 
 @hydra.main(config_path="configs", config_name="llmaj_config", version_base=None)
-def main(cfg: DictConfig):
+def main(cfg: DictConfig) -> None:
     sample_posts(
         cfg.sample.input, cfg.sample.output, cfg.sample.n, cfg.sample.random_seed
     )

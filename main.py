@@ -1,3 +1,7 @@
+"""
+Main entry point for the lang-ai project.
+"""
+
 import hydra
 from omegaconf import DictConfig
 

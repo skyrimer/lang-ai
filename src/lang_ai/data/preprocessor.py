@@ -1,8 +1,13 @@
+"""
+Data preprocessing pipeline for the lang-ai project.
+"""
+
 from collections import Counter
 from pathlib import Path
 from typing import Callable
 
 import pandas as pd
+import swifter  # noqa: F401
 from pydantic import BaseModel, Field
 from tqdm.auto import tqdm
 

@@ -1,3 +1,7 @@
+"""
+Text normalization utilities for cleaning and standardizing Reddit posts.
+"""
+
 import html
 import re
 import unicodedata
@@ -10,8 +14,7 @@ from pydantic import BaseModel
 UL = "\u00a1-\uffff"  # Django's unicode letters range
 
 regex_url_ipv4 = (
-    r"(?:25[0-5]|2[0-4]\d|[0-1]?\d?\d)"
-    r"(?:\.(?:25[0-5]|2[0-4]\d|[0-1]?\d?\d)){3}"
+    r"(?:25[0-5]|2[0-4]\d|[0-1]?\d?\d)" r"(?:\.(?:25[0-5]|2[0-4]\d|[0-1]?\d?\d)){3}"
 )
 regex_url_ipv6_bracketed = r"\[[0-9a-f:\.]+\]"  # Django: simple, validated later
 regex_url_hostname = r"[a-z" + UL + r"0-9](?:[a-z" + UL + r"0-9-]*[a-z" + UL + r"0-9])?"
