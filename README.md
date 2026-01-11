@@ -16,9 +16,11 @@ This project provides a robust pipeline for cleaning and preprocessing text data
     - Length and quality normalization.
     - Pattern-based "messy" post filtering (bots, ads, etc.).
 - **Similarity-Based Deduplication**: Identification and resolution of near-duplicate posts using Jaccard similarity and connected components clustering.
-- **LLM-as-a-Judge**: A powerful evaluation framework using `pydantic-ai` to score posts for data leakage and pollution across multiple LLM providers (OpenAI, Google, Hugging Face).
+- **LLM-as-a-Judge**: A powerful evaluation framework using `pydantic-ai` to score posts for data leakage and pollution across multiple LLM providers (OpenAI, Google, Groq, Cerebras, OpenRouter, and Hugging Face).
+- **Advanced Analysis**: Sophisticated evaluation metrics including Dawid-Skene truth estimation, Brier score ranking, Krippendorff's alpha for inter-annotator agreement, and bootstrap-based confidence intervals.
 - **Observability**: Integrated with **Logfire** for real-time tracking, logging, and performance monitoring of the entire pipeline.
 - **Resilient Execution**: Incremental processing and resume capabilities for the LLM Judge to handle large datasets efficiently.
+- **Labeling App**: Built-in Streamlit application for manual verification and labeling of disagreement samples.
 
 ## Installation
 
@@ -33,10 +35,16 @@ This project uses `uv` for lightning-fast dependency management.
 2. **Set up the environment**:
    Create a `.env` file in the root directory and add the required environment variables:
    ```env
-   # LLM Judge Configuration
-   LLM_MODEL=openai:gpt-4o-mini  # or huggingface:model_name:provider
+   # LLM Judge API Keys
    OPENAI_API_KEY=<your-openai-key>
-   HF_API_KEY=<your-huggingface-key>
+   GOOGLE_API_KEY=<your-google-key>
+   GROQ_API_KEY=<your-groq-key>
+   CEREBRAS_API_KEY=<your-cerebras-key>
+   OPENROUTER_API_KEY=<your-openrouter-key>
+   HF_TOKEN=<your-huggingface-token>
+
+   # Observability
+   LOGFIRE_TOKEN=<your-logfire-token>
    ```
 
 3. **Prepare the data**:
@@ -82,9 +90,9 @@ The easiest way to run both preprocessing and the LLM judge for a set of models 
 ```bash
 uv run main.py
 ```
-To override the models or sample size:
+To override the models or the input dataset:
 ```bash
-uv run main.py 'multi_judge.models=[openai:gpt-4o]' multi_judge.sample=500
+uv run main.py 'multi_judge.models=[openai:gpt-4o]' multi_judge.input=preprocessed_data/sample_500.csv
 ```
 
 ### 2. Individual Components
@@ -93,19 +101,19 @@ uv run main.py 'multi_judge.models=[openai:gpt-4o]' multi_judge.sample=500
   uv run python -m src.lang_ai.data.preprocessor
   ```
 - **Sample Posts**:
-  Sample a subset of posts for later evaluation:
+  Sample a subset of posts for later evaluation (configurable in `configs/llmaj_config.yaml`):
   ```bash
-  uv run python sample_posts.py sample.n=5000
+  uv run sample_posts.py sample.n=500
   ```
 
 - **Run Multiple Judges**:
   Run multiple LLM models on a specific dataset (e.g., a sample):
   ```bash
-  uv run python run_multi_judge.py multi_judge.input=preprocessed_data/sample_5000.csv
+  uv run run_multi_judge.py multi_judge.input=preprocessed_data/sample_500.csv
   ```
   To override models from the command line:
   ```bash
-  uv run python run_multi_judge.py 'multi_judge.models=[gpt-4o, huggingface:deepseek-ai/DeepSeek-V3.2:novita]'
+  uv run run_multi_judge.py 'multi_judge.models=[google:gemini-3-flash-preview, openrouter:anthropic/claude-3-haiku]'
   ```
   Results for each model will be saved in the `results/` directory as `judge_results_<model_name>_<input_dataset_filename>.csv`.
 
@@ -118,6 +126,8 @@ uv run main.py 'multi_judge.models=[openai:gpt-4o]' multi_judge.sample=500
         - `filters.py`: Regex patterns for identifying "messy" content.
     - `judge/`: LLM evaluation logic.
         - `agent.py`: `pydantic-ai` agent implementation and pipeline.
+        - `judge_analysis.py`: Evaluation metrics and agreement analysis.
+        - `labeling_app.py`: Streamlit app for manual labeling.
     - `analysis/`: Algorithmic data analysis.
         - `similarity.py`: Jaccard similarity and clustering utilities.
     - `core/`: Shared infrastructure.
@@ -125,6 +135,9 @@ uv run main.py 'multi_judge.models=[openai:gpt-4o]' multi_judge.sample=500
         - `logger.py`: Logging setup.
         - `utils.py`: Environment and path utilities.
 - `main.py`: Unified entry point for the end-to-end workflow.
+- `run_multi_judge.py`: Script for running multiple models in parallel.
+- `run_analysis.py`: Script for calculating metrics and generating disagreement samples.
+- `sample_posts.py`: Utility to sample data for evaluation.
 - `prompts/`: System prompts for the LLM Judge.
 - `raw_data/`: Input data storage (expects `assignment_data/political_leaning.csv`).
 - `preprocessed_data/`: Intermediate cleaned data.
@@ -150,7 +163,7 @@ The `DataPreprocessor` applies the following steps in order:
 The project features a sophisticated evaluation agent built on **pydantic-ai**.
 
 - **Structured Output**: Returns rich JSON objects containing `judgment`, `classification` (domain and mechanism), and `forensics` (evidence spans).
-- **Multi-Model Support**: Easily switch between OpenAI, Google, and Hugging Face models via environment variables.
+- **Multi-Model Support**: Easily switch between OpenAI, Google, Groq, Cerebras, OpenRouter, and Hugging Face models via configuration.
 - **Resume Capability**: Automatically skips already processed posts if the process is interrupted.
 - **Logging & Tracing**: Fully instrumented with Logfire for deep visibility into LLM calls and retry logic.
 
