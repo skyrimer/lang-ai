@@ -1,0 +1,73 @@
+# Evaluation Configuration for Deleaking Methodology Assessment
+# This configuration controls TF-IDF feature engineering, model training, and evaluation metrics
+
+# Dataset Paths
+paths:
+  # Path to baseline corpus (preprocessed)
+  baseline: "preprocessed_data/preprocessed_data.csv"
+
+  # Path to sanitized corpus (deleaked)
+  sanitized: "preprocessed_data/deleaked_data.csv"
+
+  # Output directory for comparison results
+  output_dir: "results/deleaking_evaluation"
+
+# TF-IDF Feature Engineering Parameters
+# Critical: No stop word removal to preserve stylometric features
+tfidf:
+  ngram_range: [1, 2]  # Unigrams and bigrams
+  max_features: 10000   # Maximum vocabulary size
+  min_df: 5             # Minimum document frequency (filters rare terms)
+  sublinear_tf: true    # Use log-scaled term frequency (1 + log(tf))
+
+# Train/Eval Split Configuration
+split:
+  train_size: 0.8       # 80% training, 20% evaluation
+  random_state: 42      # Fixed seed for reproducibility
+
+# Feature Analysis Parameters
+feature_analysis:
+  top_n_features: 50    # Number of top features to analyze per class
+
+# Geometric Analysis Parameters
+geometric:
+  silhouette_sample_size: 5000  # Subsample size for silhouette computation (performance)
+
+# Model Configurations
+# Three classifiers with varying regularization strategies
+models:
+  LogReg_NoReg:
+    class: LogisticRegression
+    params:
+      C: 10000000000    # Effectively no regularization (C=1e10)
+      max_iter: 1000
+      random_state: 42
+
+  LogReg_L2:
+    class: LogisticRegression
+    params:
+      penalty: l2       # L2 regularization (Ridge)
+      C: 1.0            # Standard regularization strength
+      max_iter: 1000
+      random_state: 42
+
+  SVM:
+    class: LinearSVC
+    params:
+      loss: squared_hinge   # Squared hinge loss for smooth optimization
+      max_iter: 1000
+      random_state: 42
+
+# Expected Outcomes
+#
+# For sanitized corpus compared to baseline:
+# 1. Stylometric Ratio: INCREASE (more function words in top features)
+# 2. Silhouette Score: DECREASE or STABLE (less topic-driven clustering)
+# 3. Centroid Distance: DECREASE or STABLE (classes less separable by topic)
+# 4. Macro F1: SLIGHT DECREASE acceptable (trade-off for better stylometry)
+# 5. Feature Jaccard: LOW (different features between baseline/sanitized)
+#
+# Interpretation Guide:
+# - High stylometric ratio = More author style-based classification
+# - Low silhouette score = Less cohesive topic clusters (good for deleaking)
+# - Low Jaccard similarity = Successful shift from topic to style features

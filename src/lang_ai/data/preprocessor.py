@@ -4,33 +4,23 @@ Data preprocessing pipeline for the lang-ai project.
 
 from collections import Counter
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Optional
 
 import pandas as pd
 import swifter  # noqa: F401
 from pydantic import BaseModel, Field
-from tqdm.auto import tqdm
 
 from src.lang_ai.analysis.similarity import (
     SimilarityAnalyzer,
     resolve_similarity_clusters,
 )
+from src.lang_ai.core.base_pipeline import BasePipeline
 from src.lang_ai.core.logger import setup_logging
-from src.lang_ai.core.utils import get_project_root
+from src.lang_ai.core.paths import ProjectPaths
 from src.lang_ai.data.filters import PollutionFilter
 from src.lang_ai.data.normalizer import TextNormalizer
 
 logger = setup_logging(__name__)
-
-
-def _get_default_data_url() -> Path:
-    """Returns the default path to the raw data file."""
-    return get_project_root() / "raw_data" / "assignment_data" / "political_leaning.csv"
-
-
-def _get_default_output_path() -> Path:
-    """Returns the default path for the preprocessed data output."""
-    return get_project_root() / "preprocessed_data" / "preprocessed_data.csv"
 
 
 def fix_typo(df: pd.DataFrame) -> pd.DataFrame:
@@ -98,7 +88,7 @@ def deduplicate_posts(df: pd.DataFrame, threshold: float = 0.8) -> pd.DataFrame:
     df_clustered, _ = analyzer.run(df)
     return resolve_similarity_clusters(
         df_clustered, text_column="post", user_column="author"
-    )
+    ).drop(columns=["similarity_cluster_id", "is_similarity_clustered"])
 
 
 def remove_messy_posts(df: pd.DataFrame) -> pd.DataFrame:
@@ -261,7 +251,7 @@ class PreprocessingSteps(BaseModel):
             pd.DataFrame: The preprocessed DataFrame.
         """
         logger.info("Running preprocessing steps...")
-        for step_name, step_func in tqdm(self.steps, desc="Preprocessing"):
+        for step_name, step_func in self.steps:
             logger.info(f"Running step: {step_name}")
             df = step_func(df)
             logger.info(f"Step {step_name} completed.")
@@ -269,69 +259,49 @@ class PreprocessingSteps(BaseModel):
         return df
 
 
-class DataPreprocessor(BaseModel):
+class DataPreprocessor(BasePipeline):
     """
-    Handles loading, preprocessing, and saving data.
+    Preprocessing pipeline for raw data.
+
+    Inherits from BasePipeline and applies a series of preprocessing steps.
     """
 
-    data_url: Path = Field(default_factory=_get_default_data_url)
-    output_path: Path = Field(default_factory=_get_default_output_path)
+    # Use Pydantic Field with default_factory for dynamic defaults
+    input_path: Path = Field(
+        default_factory=lambda: ProjectPaths.political_leaning_csv()
+    )
+    output_path: Path = Field(default_factory=lambda: ProjectPaths.preprocessed_csv())
 
-    def load_data(self) -> pd.DataFrame:
+    preprocessing_steps: PreprocessingSteps = Field(
+        default_factory=lambda: PreprocessingSteps(steps=[])
+    )
+
+    def transform(self, df: pd.DataFrame) -> pd.DataFrame:
         """
-        Loads data from the specified data_url.
+        Apply preprocessing steps to DataFrame.
+
+        Args:
+            df: Input DataFrame
 
         Returns:
-            pd.DataFrame: The loaded DataFrame.
-
-        Raises:
-            FileNotFoundError: If the data file does not exist.
+            Preprocessed DataFrame
         """
-        logger.info(f"Loading data from {self.data_url}...")
-        try:
-            df = pd.read_csv(self.data_url)
-            logger.info(f"Successfully loaded data. Shape: {df.shape}")
-            return df
-        except FileNotFoundError:
-            logger.error(f"File not found at {self.data_url}")
-            raise
-
-    def save_data(self, df: pd.DataFrame) -> None:
-        """
-        Saves the DataFrame to the specified output_path.
-
-        Args:
-            df (pd.DataFrame): The DataFrame to save.
-        """
-        self.output_path.parent.mkdir(parents=True, exist_ok=True)
-        logger.info(f"Saving preprocessed data to {self.output_path}...")
-        df.to_csv(self.output_path, index=False)
-        logger.info("Data saved successfully.")
-
-    def run_pipeline(self, pipeline: PreprocessingSteps) -> None:
-        """
-        Runs the full preprocessing pipeline.
-
-        Args:
-            pipeline (PreprocessingSteps): The pipeline of steps to execute.
-        """
-        logger.info("Running preprocessing pipeline...")
-        df = self.load_data()
-        df_preprocessed = pipeline.run_steps(df)
-        self.save_data(df_preprocessed)
-        logger.info("Preprocessing pipeline completed.")
+        logger.info("Applying preprocessing steps...")
+        df_preprocessed = self.preprocessing_steps.run_steps(df)
+        logger.info("Preprocessing steps completed.")
+        return df_preprocessed
 
 
 def preprocess_data(
-    data_url: Path = _get_default_data_url(),
-    output_path: Path = _get_default_output_path(),
+    data_url: Path = ProjectPaths.political_leaning_csv(),
+    output_path: Path = ProjectPaths.preprocessed_csv(),
 ) -> None:
     """
     Main entry point for the preprocessing script.
 
     Args:
-        data_url (Path): Path to the raw data file.
-        output_path (Path): Path where the preprocessed data will be saved.
+        data_url: Path to the raw data file (defaults to ProjectPaths.political_leaning_csv())
+        output_path: Path where the preprocessed data will be saved (defaults to ProjectPaths.preprocessed_csv())
     """
     steps = [
         ("Fixing column typo", fix_typo),
@@ -343,9 +313,13 @@ def preprocess_data(
         ("Filter for the post size", normalize_post_size),
         ("Deduplicating similar posts", deduplicate_posts),
     ]
-    preprocessor = DataPreprocessor(data_url=data_url, output_path=output_path)
-    pipeline = PreprocessingSteps(steps=steps)
-    preprocessor.run_pipeline(pipeline)
+
+    preprocessor = DataPreprocessor(
+        input_path=data_url,
+        output_path=output_path,
+        preprocessing_steps=PreprocessingSteps(steps=steps),
+    )
+    preprocessor.run()
 
 
 if __name__ == "__main__":

@@ -25,13 +25,3 @@ def get_env_var(key: str) -> str:
         raise KeyError(
             f"Environment variable {key} is not set. Check the environment variables in .env file."
         )
-
-
-def get_project_root() -> Path:
-    """
-    Returns the root directory of the project.
-
-    Returns:
-        Path: The absolute path to the project root.
-    """
-    return Path(os.getcwd())

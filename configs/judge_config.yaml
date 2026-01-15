@@ -1,0 +1,104 @@
+# Judge Pipeline Configuration
+# This pipeline creates samples and runs LLM judges for quality assessment
+
+# Sampling Configuration
+sampling:
+  # Enable/disable sampling (if false, uses full dataset)
+  enabled: false
+
+  # Input data path (relative to project root)
+#  input: "preprocessed_data/preprocessed_data.csv"
+  input: "preprocessed_data/sample_500.csv"
+
+  # Output path for sample (relative to project root)
+  output: "preprocessed_data/sample_500.csv"
+
+  # Sample size
+  sample_size: 500
+
+  # Random seed for reproducibility
+  random_seed: 42
+
+  # Stratification column (optional - if null, random sampling)
+  # Set to 'political_label' for stratified sampling by political leaning
+  stratify_column: "author"
+
+# Multi-Judge Configuration (for comparison on sample)
+multi_judge:
+  enabled: true
+  # System prompt path (relative to project root)
+  system_prompt: "prompts/llmaj_prompt_by_grazie"
+
+  # Results directory (relative to project root)
+  results_dir: "results/judge_pipeline"
+
+  # List of models to use for multi-judge comparison
+  # These models will be evaluated against each other to find the best one
+  # Supported formats:
+  #   - Direct model names (e.g., "gpt-4")
+  #   - Provider-prefixed (e.g., "google:gemini-3-flash-preview")
+  #   - OpenRouter models (e.g., "openrouter:x-ai/grok-4.1-fast")
+  models:
+    - "openrouter:x-ai/grok-4.1-fast"
+    - "openrouter:google/gemini-3-flash-preview"
+    - "openrouter:xiaomi/mimo-v2-flash:free"
+    - "openrouter:openai/gpt-oss-120b"
+    - "openrouter:qwen/qwen3-235b-a22b-2507"
+
+# Analysis Configuration (evaluates multi-judge results)
+analysis:
+  # Enable/disable analysis step
+  enabled: true
+
+  # Number of disagreement samples to save
+  disagreement_n: 25
+
+  # Path to golden labels CSV (optional)
+  # Format: CSV with columns 'post' and 'manual_label' (LEAKY/SAFE)
+  golden_labels_path: "results/golden_labels_sample_500.csv"
+#  golden_labels_path: null
+
+  # Bootstrap iterations for stability analysis
+  bootstrap_iterations: 100
+
+# Best Model Configuration (runs best judge on full dataset)
+best_model:
+  # Whether to run best model on full dataset after analysis
+  run_on_full_dataset: false
+
+  # Best model identifier (from multi-judge analysis)
+  # This is the model that performed best in the analysis
+  model: "google:gemini-3-flash-preview"
+
+  # Path to full dataset (if different from sampling.input)
+  # If null, uses sampling.input
+  full_dataset_path: null
+
+# Usage Examples (Hydra command-line overrides):
+#
+# 1. Run with default config:
+#    python run_judge_pipeline.py
+#
+# 2. Disable sampling (use full dataset):
+#    python run_judge_pipeline.py sampling.enabled=false
+#
+# 3. Disable analysis step:
+#    python run_judge_pipeline.py analysis.enabled=false
+#
+# 4. Disable best model full dataset run:
+#    python run_judge_pipeline.py best_model.run_on_full_dataset=false
+#
+# 5. Override sample size:
+#    python run_judge_pipeline.py sampling.sample_size=1000
+#
+# 6. Override models:
+#    python run_judge_pipeline.py 'multi_judge.models=["google:gemini-3-flash-preview","openrouter:x-ai/grok-4.1-fast"]'
+#
+# 7. Use different input:
+#    python run_judge_pipeline.py sampling.input=raw_data/assignment_data/political_leaning.csv
+#
+# 8. Multiple overrides:
+#    python run_judge_pipeline.py sampling.enabled=false analysis.enabled=false
+#
+# 9. Use different config file:
+#    python run_judge_pipeline.py --config-name alternative_judge_config

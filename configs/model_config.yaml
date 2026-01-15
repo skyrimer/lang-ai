@@ -1,0 +1,48 @@
+# Model Evaluation Pipeline Configuration
+# This pipeline orchestrates preprocessing, deleakage, and evaluation
+
+# Data Paths
+paths:
+  # Path to raw input data (relative to project root)
+  raw_data: "raw_data/assignment_data/political_leaning.csv"
+
+  # Path to preprocessed output (relative to project root)
+  preprocessed: "preprocessed_data/preprocessed_data.csv"
+
+  # Path to deleaked output (relative to project root)
+  deleaked: "preprocessed_data/deleaked_data.csv"
+
+  # Directory for evaluation results (relative to project root)
+  results: "results/deleaking_evaluation"
+
+# Pipeline Steps Configuration
+# These can be controlled via command-line flags for enable/disable functionality
+pipeline:
+  # Whether to run preprocessing step
+  run_preprocessing: false
+
+  # Whether to run deleakage step
+  run_deleakage: false
+
+  # Whether to run evaluation step
+  run_evaluation: true
+
+# Usage Examples:
+#
+# 1. Run full pipeline with default config:
+#    python run_model_pipeline.py
+#
+# 2. Skip preprocessing (use existing preprocessed data):
+#    python run_model_pipeline.py --skip-preprocessing
+#
+# 3. Skip deleakage (use existing deleaked data):
+#    python run_model_pipeline.py --skip-deleakage
+#
+# 4. Only run evaluation:
+#    python run_model_pipeline.py --only-evaluation
+#
+# 5. Override paths via Hydra:
+#    python run_model_pipeline.py paths.raw_data=custom_data/input.csv
+#
+# 6. Override multiple paths:
+#    python run_model_pipeline.py paths.raw_data=data/custom.csv paths.results=results/experiment_001

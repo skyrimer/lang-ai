@@ -9,11 +9,12 @@ from typing import Any
 
 import logfire
 import pandas as pd
+from google.genai.types import HarmBlockThreshold, HarmCategory, SafetySettingDict
 from pydantic_ai import Agent
-from pydantic_ai.exceptions import ModelHTTPError
+from pydantic_ai.exceptions import ModelHTTPError, UnexpectedModelBehavior
 from pydantic_ai.models import Model
 from pydantic_ai.models.cerebras import CerebrasModel
-from pydantic_ai.models.google import GoogleModel
+from pydantic_ai.models.google import GoogleModel, GoogleModelSettings
 from pydantic_ai.models.groq import GroqModel
 from pydantic_ai.models.huggingface import HuggingFaceModel
 from pydantic_ai.models.openrouter import OpenRouterModel
@@ -116,9 +117,25 @@ class LLMJudgeAgent(Agent):
                     provider=GroqProvider(api_key=get_env_var("GROQ_API_KEY")),
                 )
             case "google":
+                supported_categories = [
+                    HarmCategory.HARM_CATEGORY_HARASSMENT,
+                    HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+                    HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+                    HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+                ]
                 return GoogleModel(
                     model_name,
                     provider=GoogleProvider(api_key=get_env_var("GOOGLE_API_KEY")),
+                    settings=GoogleModelSettings(
+                        google_thinking_config={"include_thoughts": False},
+                        google_safety_settings=[
+                            SafetySettingDict(
+                                category=category,
+                                threshold=HarmBlockThreshold.BLOCK_NONE,
+                            )
+                            for category in supported_categories
+                        ],
+                    ),
                 )
             case "openrouter":
                 provider = OpenRouterProvider(api_key=get_env_var("OPENROUTER_API_KEY"))
@@ -267,8 +284,12 @@ def run_judge_pipeline(
 
     for _, row in tqdm(df.iterrows(), total=len(df), desc=f"Judging posts ({model})"):
         text = str(row[text_column])
-        result = agent.judge(text)
-        save_judge_results(result, row, output_csv)
+        try:
+            result = agent.judge(text)
+            save_judge_results(result, row, output_csv)
+        except UnexpectedModelBehavior as e:
+            logger.warning(f"Skipping row due to UnexpectedModelBehavior: {e}")
+            continue
 
     logger.info(f"Pipeline completed for model: {model}")
 
