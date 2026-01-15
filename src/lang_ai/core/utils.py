@@ -3,7 +3,6 @@ Core utility functions for the lang-ai project.
 """
 
 import os
-from pathlib import Path
 
 
 def get_env_var(key: str) -> str:

@@ -18,6 +18,8 @@ dependencies = [
     "streamlit>=1.52.2",
     "spacy>=3.8.11",
     "pycountry>=24.6.1",
+    "optuna>=4.6.0",
+    "joblib>=1.5.3",
 ]
 
 [dependency-groups]

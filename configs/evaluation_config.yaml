@@ -22,7 +22,7 @@ tfidf:
 
 # Train/Eval Split Configuration
 split:
-  train_size: 0.8       # 80% training, 20% evaluation
+  train_size: 0.9       # 90% training, 10% evaluation
   random_state: 42      # Fixed seed for reproducibility
 
 # Feature Analysis Parameters

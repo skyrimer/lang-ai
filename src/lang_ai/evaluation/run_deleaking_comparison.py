@@ -13,12 +13,13 @@ import hydra
 import pandas as pd
 from omegaconf import DictConfig
 
+from src.lang_ai.core.logger import setup_logging
+
 from .deleaking_evaluator import DeleakingEvaluator, EvaluationConfig, EvaluationResults
 from .metrics import FeatureComparator
 
-from src.lang_ai.core.logger import setup_logging
-
 logger = setup_logging()
+
 
 class DeleakingComparison:
     """
@@ -360,7 +361,9 @@ def run_comparison(
     logger.info(f"\nAll results saved to {output_dir}")
 
 
-@hydra.main(config_path="../../configs", config_name="evaluation_config", version_base=None)
+@hydra.main(
+    config_path="../../configs", config_name="evaluation_config", version_base=None
+)
 def main(cfg: DictConfig) -> None:
     """
     Hydra entry point for deleaking comparison.
@@ -371,7 +374,7 @@ def main(cfg: DictConfig) -> None:
     sanitized_path = Path(cfg.paths.sanitized)
     output_dir = Path(cfg.paths.output_dir)
 
-    logger.info(f"Running deleaking comparison from config")
+    logger.info("Running deleaking comparison from config")
     logger.info(f"Baseline: {baseline_path}")
     logger.info(f"Sanitized: {sanitized_path}")
     logger.info(f"Output directory: {output_dir}")

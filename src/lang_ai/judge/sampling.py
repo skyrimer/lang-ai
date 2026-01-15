@@ -76,7 +76,7 @@ def create_sample(
                     n=int(sample_size * len(x) / len(df)),
                     random_state=random_seed,
                 ),
-                include_groups=False
+                include_groups=False,
             )
 
             # Handle rounding issues: add/remove samples to reach exact sample_size

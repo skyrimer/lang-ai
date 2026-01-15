@@ -21,8 +21,9 @@ from sklearn.model_selection import GroupShuffleSplit
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn.svm import LinearSVC
 
-from .metrics import GeometricAnalyzer, StylometricAnalyzer
 from src.lang_ai.core.logger import setup_logging
+
+from .metrics import GeometricAnalyzer, StylometricAnalyzer
 
 logger = setup_logging()
 
