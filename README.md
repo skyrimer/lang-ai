@@ -411,12 +411,10 @@ results/deleaking_evaluation/
         - `base_pipeline.py`: Abstract base class for pipelines.
 - `run_judge_pipeline.py`: Judge pipeline orchestrator (sampling → multi-judge → analysis → best model).
 - `run_model_pipeline.py`: Model pipeline orchestrator (preprocessing → deleakage → evaluation).
-- `run_analysis.py`: DEPRECATED - Standalone analysis script (use integrated pipeline instead).
 - `prompts/`: System prompts for the LLM Judge.
 - `configs/`: Configuration files.
     - `judge_config.yaml`: Judge pipeline configuration.
-    - `evaluation_config.yaml`: Model evaluation configuration.
-    - `llmaj_config.yaml`: DEPRECATED - Old judge configuration.
+    - `model_config.yaml`: Model preprocessing/deleaking/evaluation configuration.
 - `raw_data/`: Input data storage (expects `assignment_data/political_leaning.csv`).
 - `preprocessed_data/`: Intermediate cleaned data.
 - `results/`: Final output from pipelines.

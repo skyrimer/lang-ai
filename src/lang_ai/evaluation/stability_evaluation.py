@@ -67,13 +67,12 @@ class CVResult:
     Attributes:
         name: Dataset identifier (e.g., "Baseline", "Deleaked")
         fold_metrics: Performance metrics for each CV fold
-        fold_features: Top features extracted from each CV fold per class
+        fold_features: Dictionary mapping model name to a list of fold-wise feature dictionaries.
+                       {model_name: [{class: [features]}, ...]}
         mean_metrics: Mean performance metrics across all folds
         std_metrics: Standard deviation of performance metrics across folds
-        feature_stability_matrix: DataFrame containing mean/std Jaccard overlap
-            for various Top-N thresholds aggregated across all classes
-        consensus_features: Features appearing in majority of folds (>50%)
-            per class, indicating stable discriminative features
+        feature_stability_matrix: Dictionary mapping model name to stability DataFrame.
+        consensus_features: Dictionary mapping model name to consensus features dict.
     """
 
     def __init__(self, name: str) -> None:
@@ -87,21 +86,20 @@ class CVResult:
 
         # Raw results per fold
         self.fold_metrics: List[Dict[str, float]] = []
-        self.fold_features: List[
-            Dict[str, List[str]]
-        ] = []  # List of {class: [features]}
+        # Changed to store features per model
+        self.fold_features: Dict[
+            str, List[Dict[str, List[str]]]
+        ] = {}  # Model -> List of {class: [features]}
 
         # Aggregated Statistics
         self.mean_metrics: Dict[str, float] = {}
         self.std_metrics: Dict[str, float] = {}
 
-        # Stability Data
-        self.feature_stability_matrix: pd.DataFrame = (
-            pd.DataFrame()
-        )  # Matrix of Mean/Std overlap per N
+        # Stability Data (Per Model)
+        self.feature_stability_matrix: Dict[str, pd.DataFrame] = {}  # Model -> Matrix
         self.consensus_features: Dict[
-            str, List[str]
-        ] = {}  # Class -> Features present in >50% folds
+            str, Dict[str, List[str]]
+        ] = {}  # Model -> {Class -> Features}
 
 
 class FeatureStabilityAnalyzer:
@@ -248,23 +246,31 @@ class LeakageQuantifier:
         """
         self.base = baseline
         self.clean = deleaked
-        self.classes = list(baseline.consensus_features.keys())
         self.top_n_list = top_n_list
 
-    def analyze(self) -> pd.DataFrame:
+    def analyze(self, model_name: str) -> pd.DataFrame:
         """
-        Create comparison table showing Jaccard overlap per class and Top-N.
+        Create comparison table showing Jaccard overlap per class and Top-N
+        for a specific model.
+
+        Args:
+            model_name: The name of the model to analyze (must exist in CVResults)
 
         Returns:
             DataFrame with columns: Class, Top_5, Top_10, Top_20, etc.
-            Each cell contains Jaccard similarity (0.0-1.0) between baseline
-            and deleaked feature sets for that class at that threshold.
         """
         rows = []
 
-        for cls in self.classes:
-            base_feats = self.base.consensus_features.get(cls, [])
-            clean_feats = self.clean.consensus_features.get(cls, [])
+        # Retrieve consensus features for this specific model
+        base_consensus = self.base.consensus_features.get(model_name, {})
+        clean_consensus = self.clean.consensus_features.get(model_name, {})
+
+        # Classes are derived from the baseline consensus keys
+        classes = list(base_consensus.keys())
+
+        for cls in classes:
+            base_feats = base_consensus.get(cls, [])
+            clean_feats = clean_consensus.get(cls, [])
 
             row = {"Class": cls}
 
@@ -371,8 +377,8 @@ class EvaluationPipeline:
         1. Load and vectorize data (single vectorizer for speed)
         2. Split data using Stratified Group K-Fold (respects author groups)
         3. Train models and collect metrics for each fold
-        4. Extract top-N features from reference model
-        5. Compute aggregated statistics and feature stability
+        4. Extract top-N features from ALL models
+        5. Compute aggregated statistics and feature stability for ALL models
 
         Args:
             data_path: Path to the dataset file (CSV or JSON)
@@ -381,7 +387,7 @@ class EvaluationPipeline:
 
         Returns:
             CVResult containing fold-wise metrics, consensus features,
-            and feature stability analysis
+            and feature stability analysis per model
         """
         data_path = Path(data_path)
         logger.info(f"--- Starting CV Pipeline: {dataset_name} ({n_splits} folds) ---")
@@ -407,6 +413,10 @@ class EvaluationPipeline:
         cv = StratifiedGroupKFold(n_splits=n_splits)
         f1_scores = {name: [] for name in self.cfg.models.keys()}
 
+        # Initialize per-model storage in result
+        for model_name in self.cfg.models.keys():
+            result.fold_features[model_name] = []
+
         # We need to extract enough features to cover the largest N requested
         max_n = max(self.top_n_list)
 
@@ -415,16 +425,14 @@ class EvaluationPipeline:
         ):
             logger.info(f"Processing Fold {fold_idx + 1}/{n_splits}...")
 
-            # Slice the pre-computed sparse matrix
             X_train_vec = X_all_vec[train_idx]
             X_val_vec = X_all_vec[val_idx]
             y_train_fold, y_val_fold = y_raw[train_idx], y_raw[val_idx]
 
             classes = np.unique(y_train_fold)
-            current_fold_features = {}
 
             # Train Models
-            for i, (name, model_config) in enumerate(self.cfg.models.items()):
+            for name, model_config in self.cfg.models.items():
                 model_cls = MODEL_CLASSES[model_config["class"]]
                 model = model_cls(**dict(model_config["params"]))
 
@@ -434,13 +442,9 @@ class EvaluationPipeline:
                 score = f1_score(y_val_fold, preds, average="macro")
                 f1_scores[name].append(score)
 
-                # Extract features from the first model only (Reference model)
-                if i == 0:
-                    current_fold_features = self.extract_top_features(
-                        vectorizer, model, classes, max_n
-                    )
-
-            result.fold_features.append(current_fold_features)
+                # Extract features for THIS model
+                features = self.extract_top_features(vectorizer, model, classes, max_n)
+                result.fold_features[name].append(features)
 
         # --- Aggregate Statistics ---
 
@@ -452,19 +456,20 @@ class EvaluationPipeline:
                 f"{name}: Mean F1 = {np.mean(scores):.4f} (+/- {np.std(scores):.4f})"
             )
 
-        # 2. Consensus Features
-        min_folds = (n_splits // 2) + 1
-        result.consensus_features = FeatureStabilityAnalyzer.extract_consensus_features(
-            result.fold_features, min_folds=min_folds
-        )
-
-        # 3. Feature Stability Matrix (Mean/Std for list of Ns)
-        logger.info("Computing Feature Stability Matrix...")
-        result.feature_stability_matrix = (
-            FeatureStabilityAnalyzer.compute_stability_matrix(
-                result.fold_features, self.top_n_list
+        # 2. Consensus Features & Stability Matrix for EACH model
+        logger.info("Computing Feature Stability Matrices for all models...")
+        for name in self.cfg.models.keys():
+            min_folds = (n_splits // 2) + 1
+            result.consensus_features[name] = (
+                FeatureStabilityAnalyzer.extract_consensus_features(
+                    result.fold_features[name], min_folds=min_folds
+                )
             )
-        )
+            result.feature_stability_matrix[name] = (
+                FeatureStabilityAnalyzer.compute_stability_matrix(
+                    result.fold_features[name], self.top_n_list
+                )
+            )
 
         return result
 
@@ -508,65 +513,85 @@ def main(cfg: DictConfig) -> None:
     quantifier = LeakageQuantifier(
         res_baseline, res_deleaked, cfg.feature_analysis.top_n_list
     )
-    leakage_df = quantifier.analyze()
 
     # --- OUTPUT REPORTS ---
     output_dir.mkdir(parents=True, exist_ok=True)
 
     logger.info("CROSS-VALIDATION DELEAKING REPORT")
 
-    model_name = list(cfg.models.keys())[0]
-
-    # 1. Performance Stability
+    # 1. Performance Stability (Iterate over ALL models)
     logger.info(f"\n1. PERFORMANCE STABILITY ({n_splits}-Fold CV)")
     logger.info(
-        f"{'Metric':<20} | {'Baseline (Mean +/- Std)':<30} | {'Deleaked (Mean +/- Std)':<30}"
+        f"{'Model':<25} | {'Baseline (Mean +/- Std)':<30} | {'Deleaked (Mean +/- Std)':<30}"
     )
+    logger.info("-" * 90)
 
-    base_m = res_baseline.mean_metrics[f"{model_name}_mean_f1"]
-    base_s = res_baseline.std_metrics[f"{model_name}_std_f1"]
-    del_m = res_deleaked.mean_metrics[f"{model_name}_mean_f1"]
-    del_s = res_deleaked.std_metrics[f"{model_name}_std_f1"]
+    for model_name in cfg.models.keys():
+        base_m = res_baseline.mean_metrics.get(f"{model_name}_mean_f1", 0.0)
+        base_s = res_baseline.std_metrics.get(f"{model_name}_std_f1", 0.0)
+        del_m = res_deleaked.mean_metrics.get(f"{model_name}_mean_f1", 0.0)
+        del_s = res_deleaked.std_metrics.get(f"{model_name}_std_f1", 0.0)
 
-    logger.info(
-        f"{'Macro F1':<20} | {base_m:.4f} +/- {base_s:.4f}           | {del_m:.4f} +/- {del_s:.4f}"
-    )
-
-    # 2. Feature Stability Matrix
-    logger.info("\n2. FEATURE STABILITY MATRIX (Mean Jaccard +/- Std)")
-    logger.info("Aggregated across all classes.")
-
-    if (
-        not res_baseline.feature_stability_matrix.empty
-        and not res_deleaked.feature_stability_matrix.empty
-    ):
-        stab_base = res_baseline.feature_stability_matrix.set_index("Top_N")
-        stab_clean = res_deleaked.feature_stability_matrix.set_index("Top_N")
-
-        stab_base = stab_base.rename(
-            columns={"Mean_Overlap": "Base_Mean", "Std_Overlap": "Base_Std"}
-        )
-        stab_clean = stab_clean.rename(
-            columns={"Mean_Overlap": "Clean_Mean", "Std_Overlap": "Clean_Std"}
+        logger.info(
+            f"{model_name:<25} | {base_m:.4f} +/- {base_s:.4f}           | {del_m:.4f} +/- {del_s:.4f}"
         )
 
-        merged = stab_base.join(stab_clean)
-        merged["Baseline"] = merged.apply(
-            lambda x: f"{x['Base_Mean']:.3f} ± {x['Base_Std']:.3f}", axis=1
+    # 2. Feature Stability Matrix (Iterate over ALL models)
+    for model_name in cfg.models.keys():
+        logger.info(
+            f"\n2. FEATURE STABILITY MATRIX (Mean Jaccard +/- Std) [Using: {model_name}]"
         )
-        merged["Deleaked"] = merged.apply(
-            lambda x: f"{x['Clean_Mean']:.3f} ± {x['Clean_Std']:.3f}", axis=1
+        logger.info("Aggregated across all classes.")
+
+        stab_base = res_baseline.feature_stability_matrix.get(model_name)
+        stab_clean = res_deleaked.feature_stability_matrix.get(model_name)
+
+        if (
+            stab_base is not None
+            and not stab_base.empty
+            and stab_clean is not None
+            and not stab_clean.empty
+        ):
+            stab_base = stab_base.set_index("Top_N")
+            stab_clean = stab_clean.set_index("Top_N")
+
+            stab_base = stab_base.rename(
+                columns={"Mean_Overlap": "Base_Mean", "Std_Overlap": "Base_Std"}
+            )
+            stab_clean = stab_clean.rename(
+                columns={"Mean_Overlap": "Clean_Mean", "Std_Overlap": "Clean_Std"}
+            )
+
+            merged = stab_base.join(stab_clean)
+            merged["Baseline"] = merged.apply(
+                lambda x: f"{x['Base_Mean']:.3f} ± {x['Base_Std']:.3f}", axis=1
+            )
+            merged["Deleaked"] = merged.apply(
+                lambda x: f"{x['Clean_Mean']:.3f} ± {x['Clean_Std']:.3f}", axis=1
+            )
+
+            logger.info(merged[["Baseline", "Deleaked"]].to_string())
+            merged.to_csv(
+                output_dir / f"comparative_feature_stability_{model_name}.csv"
+            )
+        else:
+            logger.info(
+                f"Feature stability matrix could not be computed for {model_name}."
+            )
+
+    # 3. Leakage Quantification - Iterate over ALL models
+    for model_name in cfg.models.keys():
+        logger.info(
+            f"\n3. LEAKAGE QUANTIFICATION (Jaccard Overlap: Baseline vs Deleaked) [Using: {model_name}]"
         )
-
-        logger.info(merged[["Baseline", "Deleaked"]].to_string())
-        merged.to_csv(output_dir / "comparative_feature_stability.csv")
-    else:
-        logger.info("Feature stability matrix could not be computed.")
-
-    # 3. Leakage Quantification - Jaccard per Class per Top_N
-    logger.info("\n3. LEAKAGE QUANTIFICATION (Jaccard Overlap: Baseline vs Deleaked)")
-    logger.info(leakage_df.to_string(index=False))
-    leakage_df.to_csv(output_dir / "cv_leakage_quantification.csv", index=False)
+        leakage_df = quantifier.analyze(model_name)
+        if not leakage_df.empty:
+            logger.info(leakage_df.to_string(index=False))
+            leakage_df.to_csv(
+                output_dir / f"cv_leakage_quantification_{model_name}.csv", index=False
+            )
+        else:
+            logger.info(f"No leakage data available for {model_name}")
 
 
 if __name__ == "__main__":
