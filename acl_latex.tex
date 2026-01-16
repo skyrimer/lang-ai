@@ -1,0 +1,227 @@
+\documentclass[11pt]{article}
+
+% Change "review" to "final" to generate the final (sometimes called camera-ready) version.
+% Change to "preprint" to generate a non-anonymous version with page numbers.
+\usepackage[final]{acl}
+
+% Standard package includes
+\usepackage{times}
+\usepackage{latexsym}
+
+% For proper rendering and hyphenation of words containing Latin characters (including in bib files)
+\usepackage[T1]{fontenc}
+% For Vietnamese characters
+% \usepackage[T5]{fontenc}
+% See https://www.latex-project.org/help/documentation/encguide.pdf for other character sets
+
+% This assumes your files are encoded as UTF8
+\usepackage[utf8]{inputenc}
+
+% This is not strictly necessary, and may be commented out,
+% but it will improve the layout of the manuscript,
+% and will typically save some space.
+\usepackage{microtype}
+
+% This is also not strictly necessary, and may be commented out.
+% However, it will improve the aesthetics of text in
+% the typewriter font.
+\usepackage{inconsolata}
+
+%Including images in your LaTeX document requires adding
+%additional package(s)
+\usepackage{graphicx}
+\usepackage{amsmath} 
+\usepackage{listings}
+\usepackage{capt-of} 
+% TODO: this is what I add for quick table formatting:
+% \usepackage{booktabs}
+
+\lstset{
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    breakatwhitespace=true,
+    columns=fullflexible
+}
+
+% If the title and author information does not fit in the area allocated, uncomment the following
+%
+%\setlength\titlebox{<dim>}
+%
+% and set <dim> to something 5cm or larger.
+
+\title{Exploration of data leakage reduction methodology using LLMAJ framework for political leaning}
+
+\author{Interim Assignment 12 \\
+  Kirill Chekmenev / 1980181 \\
+  Stanimir Dimitrov / 1932217 \\
+  Joshua Pantekoek / 1944134 \\
+  Trinity Jan / 2041839 \\}
+
+\begin{document}
+\maketitle
+\begin{abstract}
+    Text classification models, particularly in stylometry, often exploit topical shortcuts instead of true stylistic patterns. We propose a deleakage pipeline that combines multi-stage preprocessing, LLM-assisted leakage identification, and deterministic rule-based cleaning to reduce reliance on word-based cues. Evaluating logistic regression and linear SVMs, we find that feature selection becomes slightly more consistent across cross-validation folds, and models shift somewhat toward stylistic patterns, while overall $\mathrm{F1}_{\text{macro}}$ remains largely unchanged. These results demonstrate the potential of dataset-level strategies to mitigate semantic leakage, improving the reliability, interpretability, and generalizability of stylometry-based predictions.
+\end{abstract}
+
+\section{Introduction}
+The field of Natural Language Processing and its stylometry-based classification domain are prone to spurious correlations and shortcut learning due to the complexity of the true underlying patterns in textual data. Stylometry-based political profiling focuses on identifying literary styles and linguistic patterns to characterize authors’ political beliefs. While we want to model to use stylometry only, various kinds of data leakages are noticeably easier for them to learn: the frequency of raised topics by the authors is uneven, and the political text often contains explicit references to actors, events, and ideologies that allow models to infer labels through semantic shortcuts rather than stylistic cues.
+
+
+This work examines how we can use a Large Language Model-as-a-Judge (LLMAJ) framework (prompting LLMs to derive conclusions about the data) to identify and mitigate data leakage. We believe that using \textbf{LLMAJ allows us to quickly identify a wide range of semantic shortcuts and remove them, forcing models to rely on robust stylometric features and resulting in lower but fairer and more generalizable performance}. Rather than treating accuracy as the primary goal, we want to evaluate how LLM methodologies can help us remove context-dependent leakage and promote a focus on stylometric cues during classifier training.
+
+\section{Related Work}
+Work such as \citet{kopel_2009} and \citet{stomatatos_2009} establishes that the goal of stylometry is to identify stable, author-specific linguistic and stylistic patterns that are independent of the topics discussed. Otherwise, models risk focusing on the most common topics within groups rather than their shared stylometric signal. While their research has been out for decades, the methodology of splitting stylometry from topics in large-scale corpora remains an open challenge.
+
+This is especially true for author profiling tasks, where the content is highly vulnerable to leakage. The study conducted by \citet{political_leaning_overexposure} shows that the highest-performing models used topics and named entities rather than stylometric signals to classify authors' political leanings. While some models used regularization via adversarial training, none of the solutions attempted data-centric approaches, which we try to develop in this study.
+
+As we don’t have deterministic ways to predict leakages in advance, the mult-LLMAJ relies heavily on the “silver standard” annotation methodology. Recent research by \citet{llm_vs_human} suggests that ensembles of Large Language Models (LLMs)—when used diagnostically—can approximate human judgment in semantic tasks. \citet{dw_benefits} shows that cross-annotation using the Dawid–Skene model \citet{dw_original} is a more robust approach than the majority rule for approximating true labels in the presence of highly noisy data. Using it, we can ensemble the LLMs' answers to find the best judge, then evaluate the dataset for all kinds of leakage, which we then model deterministically to reduce LLM-based noise, allowing the creation of corpora with and without leakage that are later used for a rigorous reassessment of stylometric validity.
+
+\section{Data}
+We used a subset of the \citet{reddit_dataset} SOBR dataset, a political-leaning text dataset containing 57,231 posts from the online discussion platform Reddit, each linked to an anonymized author ID and a political leaning label: left, center, or right. Posts vary widely in length, ranging from short conversational remarks (206 "words") to longer argumentative texts (1500 "words"). Furthermore, the dataset exhibits moderate class imbalance: center-, right- and left-leaning posts constitute 44.0\%, 30.5\% , and 25.5\% respectively. During the exploratory data analysis, we further identified that not all posts can be used for stylometric analysis due to ASCII art, AI-generated content, and spam comments (e.g., skull emoji repeated over 1000 times).
+Lastly, due to moderate preprocessing during SOBR dataset collection, the corpus content was not modified, which, according to the literature review, exposes it to data leakage and shortcut learning.
+
+\section{Methodology and Experimental Setup}
+The experimental pipeline consists of three main stages: (i) multi-stage preprocessing, including pollution removal; (ii) de-leakage, targeting the removal of leakage patterns; and (iii) evaluation, comparing baseline and sanitized conditions. The first stage removes low-information posts, (near-)duplicates, texts with excessive non-standard characters, and non-human posts. URLs, usernames, subreddit names, and other unusable identifiers are normalized to standard tokens (e.g. $[\text{EMAIL}]$).
+
+In the second stage, we identify the data leakage using an LLMAJ framework. We sample 500 posts and use five diverse models to assess each post, providing structured labels and rationales: x-ai/grok-4.1-fast, google/gemini-3-flash-preview, xiaomi/mimo-v2-flash, openai/gpt-oss-120b, and qwen/qwen3-235b-a22b-2507 \citep{xai_grok_4_1_fast,google_gemini_3_flash_preview,xiaomi_mimo_v2_flash,openai_gpt_oss_120b,qwen_qwen3_235b_a22b_2507}
+. Such a selection provides architectural diversity, state-of-the-art performance on language understanding tasks, and availability of publicly documented evaluation results, ensuring broad coverage. After obtaining LLM results, we evaluate them using the Dawid-Skene reliability \citet{dw_original} and the number of posts with wrong leakage evidence reported by the LLM (e.g., the LLM reports "Trump" even though there is no "Trump" mention in the post). To further strengthen the evaluation, we collected 50 cases with the largest disagreement between the models and manually annotated them independently. After correction, we had 25 samples on which all 3 human annotators agreed, which we used as a gold standard to compute F1 and Recall. Because the models are probabilistic, we also resample the posts 100 times to obtain confidence intervals for each reported metric, enabling statistical testing. Consequently, we evaluate the resulting framework to select a single best judge that captures the most data leaks, and we run it on the entire corpus. We later analyse the results and derive deterministic strategies to best capture all kinds of data leakage and filter the dataset to create non-leaky corpora.
+
+Using two corpora (with and without leakages), we evaluate its effectiveness via 10-fold cross-validation with author splits, thereby preventing authors from appearing in both the training and evaluation sets. The classification task is determining the author’s political leaning (left, center, or right). For each corpus, TF-IDF vectorization with unigrams, bigrams, and trigrams, limited to 20,000 features, is applied without removing function words to preserve maximum stylometry and encourages models to rely on topics while preserving stylistic patterns. We then employ two linear models: logistic regression and a linear support vector machine (SVM). Both models are selected for their interpretability and for the association between features and model coefficients, which facilitates feature importance analysis. To ensure that models’ predictive power, we hypertune on an identical 10-fold cross-validation setup to optimize $\mathrm{F1}_{\text{macro}}$.
+
+For evaluation, we aimed to compare the model's absolute performance on the classification task before and after deleakage, as well as the features used to achieve that performance. Macro $F1$ score (which balances precision and recall) is used to measure the absolute classification and is calculated by
+$\mathrm{F1}_{\text{macro}}=\frac{1}{C}\sum_{c=1}^{C}\frac{2\,\mathrm{TP}_c}{2\,\mathrm{TP}_c+\mathrm{FP}_c+\mathrm{FN}_c}$,
+where $c$ is the individual class value. Feature importance is derived from model coefficients. Top-$@$ (where $@$ is 5, 10, 20, 50, 100) feature stability is measured using the Jaccard overlap, calculated by
+$J(A,B)=\frac{|A\cap B|}{|A|+|B|-|A\cap B|}$
+across cross-validation folds, providing a quantitative metric of how consistent the most important features are across runs. Increased mean Jaccard overlap and reduced variance after de-leakage indicate that the model focuses less on fold-specific keywords and more on consistent stylistic patterns.
+
+For all models, our expectation from the experiment is to observe a drop in the mean $\mathrm{F1}_{\text{macro}}$ across $10$-folds for non-leaky corpora, with a smaller standard deviation than for the leaky one. In terms of the features, we expect the lowest overlap between the top-$5$ most important ones, which increases with $N$. The last observation we hypothesize is that the leaky pipeline has lower top-$@$ feature overlap across folds.
+
+\section{Results}
+Table \ref{tab:judge_performance_stacked} reports the results of the multi-LLMAJ experiment. Despite GPT-OSS-120B having the highest Dawid-Skene reliability, it is not statistically different from Grok-4.1-Fast, while exhibiting a high hallucination rate and the worst performance on the golden sample. This is likely due to the small number of judges and the agreement with the Qwen3 and MiniMax. Thus, Grok-4.1-Fast is the overall best model, given its statistically significant reliability advantage and lower hallucination rate. For blind unsupervised leakage identification, it would be the most obvious choice, but, after qualitative analysis of the results and considering the highest recall on the golden sample, we have chosen Gemini-3-flash, as it captures the most types of potential leaks while overconfidence in leakage is later mitigated upon human review.
+\begin{table}[t]
+\centering
+\caption{Judge performance. Std. dev. is shown in parentheses below the mean.}
+\label{tab:judge_performance_stacked}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lcccc}
+\hline
+\textbf{Judge} & \ \textbf{DS Rel.} & \ \textbf{Halluc.} & \ \textbf{G. Rec.} & \ \textbf{G. F1} \\
+\hline
+GPT-oss & 0.836 & 134.4 & 0.00 & 0.00 \\[-0.5ex]
+\scriptsize{(120B)} & \scriptsize{($\pm$0.05)} & \scriptsize{($\pm$10.7)} & \scriptsize{($\pm$0.0)} & \scriptsize{($\pm$0.0)} \\
+\hline
+Grok-4.1 & 0.823 & 40.6 & 76.96 & 86.10 \\[-0.5ex]
+\scriptsize{(Fast)} & \scriptsize{($\pm$0.05)} & \scriptsize{($\pm$5.9)} & \scriptsize{($\pm$15.0)} & \scriptsize{($\pm$10.6)} \\
+\hline
+Qwen3 & 0.758 & 127.1 & 10.83 & 12.15 \\[-0.5ex]
+\scriptsize{(235B)} & \scriptsize{($\pm$0.05)} & \scriptsize{($\pm$9.8)} & \scriptsize{($\pm$11.9)} & \scriptsize{($\pm$12.1)} \\
+\hline
+Gemini-3 & 0.515 & 73.8 & 100.0 & 53.74 \\[-0.5ex]
+\scriptsize{(Flash)} & \scriptsize{($\pm$0.01)} & \scriptsize{($\pm$8.5)} & \scriptsize{($\pm$0.0)} & \scriptsize{($\pm$9.8)} \\
+\hline
+Mimo-v2 & 0.508 & 161.4 & 100.0 & 53.74 \\[-0.5ex]
+\scriptsize{(Flash)} & \scriptsize{($\pm$0.01)} & \scriptsize{($\pm$11.1)} & \scriptsize{($\pm$0.0)} & \scriptsize{($\pm$9.8)} \\
+\hline
+\end{tabular}
+\end{table}
+After running Gemini on the entire dataset, we manually looked through all leakage evidence and categorised them as follows: places (e.g., Russia), community-specific slang (e.g., LibRight), political slurs (e.g., Orange Man), pejoratives (e.g., soyboy), named entities (e.g., Obama), religion identifications (e.g., Jewish), and political ideology (e.g., socialist). Upon reviewing the leaks, we haven't observed any consistent patterns beyond unigram- or topic-level leaks spanning multiple sentences. Due to the complexity of the second type, we focused on unigrams and replaced all "leaky" wordings with stylistically neutral tokens (e.g., replacing Obama with $[\text{PERSON}]$). This way, we preserve our tokenizer while only adding neutral tokens.
+
+Given this de-leaking, we evaluated the models. Table \ref{tab:baseline_deleaked} reports the macro F1 performance of logistic regression (LogReg) and support vector machine (SVM) models on the baseline and deleaked corpora. Overall, macro F1 scores are largely comparable across conditions, with a slight decrease after deleakage for both models (LogReg goes from 0.441 to 0.434; SVM goes from 0.437 to 0.431). 
+\begin{table}[t]
+    \centering
+    \caption{Baseline vs.\ Deleaked performance (mean $\pm$ std).}
+    \label{tab:baseline_deleaked}
+    \begin{tabular}{|l|c|c|}
+    \hline
+    \textbf{Model} & \textbf{Baseline} & \textbf{Deleaked} \\
+    \hline
+    LogReg & 0.441 $\pm$ 0.060 & 0.434 $\pm$ 0.057 \\
+    \hline
+    SVM    & 0.437 $\pm$ 0.055 & 0.431 $\pm$ 0.050 \\
+    \hline
+\end{tabular}
+\end{table}
+Secondly, Table \ref{tab:feature_stability_stacked} presents the feature stability across cross-validation folds, measured as the mean Jaccard overlap of the top-N ranked features. For both LogReg and SVM, feature stability is consistently higher in the deleaked condition, indicating that more features remain consistent across folds when topical cues are removed. For example, the highest stability is for SVM, where the mean overlap for the top-10 feature increases from 0.538 to 0.569. 
+\begin{table}[t]
+    \centering
+    \label{tab:feature_stability_stacked}
+    \begin{tabular}{lcc}
+    \hline
+    \textbf{Top-$@$} & \textbf{Baseline} & \textbf{Deleaked} \\
+    \hline
+    \multicolumn{3}{c}{\textit{Logistic Regression}} \\
+    \hline
+    5   & 0.460 $\pm$ 0.200 & 0.522 $\pm$ 0.206 \\
+    10  & 0.489 $\pm$ 0.152 & 0.535 $\pm$ 0.126 \\
+    20  & 0.531 $\pm$ 0.129 & 0.550 $\pm$ 0.112 \\
+    50  & 0.506 $\pm$ 0.075 & 0.527 $\pm$ 0.076 \\
+    100 & 0.535 $\pm$ 0.058 & 0.543 $\pm$ 0.050  \\
+    \hline
+    \multicolumn{3}{c}{\textit{Support Vector Machine (SVM)}} \\
+    \hline
+    5   & 0.439 $\pm$ 0.184 & 0.499 $\pm$ 0.202 \\
+    10  & 0.538 $\pm$ 0.148 & 0.569 $\pm$ 0.131 \\
+    20  & 0.517 $\pm$ 0.130 & 0.534 $\pm$ 0.123 \\
+    50  & 0.521 $\pm$ 0.083 & 0.530 $\pm$ 0.081 \\
+    100 & 0.538 $\pm$ 0.054 & 0.555 $\pm$ 0.053 \\
+    \hline
+    \end{tabular}
+    \caption{Feature stability matrix (Mean Jaccard $\pm$ Std), aggregated across all classes.}
+\end{table}
+Looking at the last table, Table \ref{tab:leakage_quantification_stacked} quantifies the overlap between the top-N features in the baseline and deleaked datasets, calculated separately for each class. Lower Jaccard scores indicate that many features that were important in the baseline are no longer among the top features after deleakage. For instance, in logistic regression, the top-10 features for the left class have an overlap of 0.333, while in the right class the overlap is 0.818. Similar patterns are observed for SVM, namely that the label denoting Right parties show more overlap as compared to the Center or Left classes.
+\begin{table}[t]
+\centering
+\label{tab:leakage_quantification_stacked}
+\begin{tabular}{lccc}
+\hline
+\textbf{Top-$@$} & \textbf{Center} & \textbf{Left} & \textbf{Right} \\
+\hline
+\multicolumn{4}{c}{\textit{Logistic Regression}} \\
+\hline
+5   & 0.667 & 0.250 & 0.667 \\
+10  & 0.667 & 0.333 & 0.818 \\
+20  & 0.667 & 0.538 & 0.667 \\
+50  & 0.667 & 0.639 & 0.724 \\
+100 & 0.703 & 0.716 & 0.782 \\
+\hline
+\multicolumn{4}{c}{\textit{Support Vector Machine (SVM)}} \\
+\hline
+5   & 0.667 & 0.429 & 0.667 \\
+10  & 0.667 & 0.667 & 0.818 \\
+20  & 0.667 & 0.667 & 0.739 \\
+50  & 0.639 & 0.667 & 0.724 \\
+100 & 0.750 & 0.717 & 0.794 \\
+\hline
+\end{tabular}
+\caption{Leakage quantification: Jaccard overlap between Baseline and Deleaked feature sets (per class).}
+\end{table}
+\section{Discussion}
+Our experimental results indicate that the deleakage pipeline (modestly) reduces reliance on word-based topical shortcuts for standard linear models such as logistic regression and SVM. While the removal of explicit topic cues leads to slightly more consistent feature selection across cross-validation folds, the absolute changes in macro F1 are small, suggesting that the overall predictive performance is largely preserved. Although the results demonstrate that deleakage succesfully removes a substantial portion of the features associated with topic-specific cues, implying a shift toward alternative predictive signals, the overall effect on performance is not dramatic, such that some topical signals may still be leveraged by these models.
+
+All in all, several limitations remain. First, more advanced models, such as transformers, may still infer topics from context, and the impact of word-based deleakage on such models has not been explored. Second, the LLM-assisted identification of leakages is effective in principle but still requires substantial human supervision and domain knowledge. Automating this process would require careful prompt engineering and expertise in the domain, making it less suitable for new fields.
+
+Third, the effectiveness of the pipeline is bounded by the quality of the LLM. While a good model with well-designed prompts can detect many leakages, there is no generalizable procedure for selecting prompts or evaluating judgments. Even silver-standard methods cannot fully replace human cross-annotation for ground-truth validation.
+
+Fourth, dataset-based deleakage complements model-side mitigation strategies (e.g., objectives that penalize topic reliance), but the relative effectiveness of these approaches remains unknown. Dataset-level removal is likely more broadly applicable, since not all models can be designed to suppress topic learning.
+
+Finally, the abstraction of sensitive content (e.g., replacing names or countries) may disrupt existing models that have not seen such tokens and is highly sensitive to emerging topics or new slurs. Mitigating these systematically requires repeating the deleakage process continuously, as new tokens and references appear over time.
+
+\section{Conclusion}
+To conclude, this work presents a deleakage pipeline designed to reduce the reliance of text classification models on word-based topical cues. By combining multi-stage preprocessing, LLM-assisted leakage identification, and deterministic rule-based cleaning, we show that standard linear models such as logistic regression and SVM exhibit slightly more stable feature selection and a shift toward stylistic patterns. While absolute predictive performance is largely preserved, the effect of deleakage is still of interest in both classic label classification or author identification. 
+
+Overall, the pipeline provides a practical, dataset-level approach for mitigating obvious leakage, complementing potential strategies on the model side. The results highlight both the promise and the limitations of such methods, pointing to the need for further exploration with more complex models and continuous adaptation to new, emerging content.
+
+\newpage
+\section*{Authorship Statement}
+Use of AI tooling: The main report text was written by the respective paper authors, with occasional refinements by ChatGPT for spelling correction and refinement of the language style. The entire text was then later verified by all of the authors to fit our ideas and respective analysis conducted. As for the code, we used Claude Opus 4.5 to write all the comments, documentation, and simplify the code logic after the core methodology and experiments was written by authors. This way, we saved a lot of our time, while making the code/methodology/experiments more accessible to other for review. All LLM output was author-reviewed afterwards to ensure correctness.
+Workload distribution: before mentioning the specific tasks, we would like to acknowledge that the planning, reasoning discussions, code/report reviews and golden sample annotation were done by each author in more or less equal proportion. On the personal side,
+\begin{itemize}
+    \item \textbf{Kirill Chekmenev (1980181)} was responsible for the LLMAJ experiment set-up and model hyperparameter tuning
+    \item \textbf{Stanimir Dimitrov (1932217)} was responsible for the conversion of LLMAJ results into deterministic metrics
+    \item \textbf{Joshua Pantekoek (1944134)} was responsible for preprocessing the dataset and initial research on the topics
+    \item \textbf{Trinity Jan (2041839)} was responsible for the model evaluation set-up and interpretation of the results
+\end{itemize}
+
+\bibliography{custom}
+
+\end{document}
