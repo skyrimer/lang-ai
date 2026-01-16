@@ -10,12 +10,13 @@ This pipeline orchestrates:
 from pathlib import Path
 
 import hydra
+from hydra import compose, initialize_config_dir
 from omegaconf import DictConfig
 
 from src.lang_ai.core.logger import setup_logging
 from src.lang_ai.data.deleakage_pipeline import deleakage_pipeline
 from src.lang_ai.data.preprocessor import preprocess_data
-from src.lang_ai.evaluation.run_deleaking_comparison import run_comparison
+from src.lang_ai.evaluation.stability_evaluation import main as run_stability_evaluation
 
 logger = setup_logging(__name__)
 
@@ -63,13 +64,7 @@ def run_model_pipeline_from_config(cfg: DictConfig) -> None:
         logger.info(f"Baseline corpus: {preprocessed_path}")
         logger.info(f"Sanitized corpus: {deleaked_path}")
         logger.info(f"Results directory: {results_dir}")
-
-        run_comparison(
-            baseline_path=preprocessed_path,
-            sanitized_path=deleaked_path,
-            output_dir=results_dir,
-            config=None,  # Uses evaluation_config.yaml via Hydra
-        )
+        run_stability_evaluation(cfg)
     else:
         logger.info("Skipping evaluation step")
 

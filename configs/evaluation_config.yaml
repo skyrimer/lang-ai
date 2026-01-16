@@ -2,6 +2,7 @@
 # This configuration controls TF-IDF feature engineering, model training, and evaluation metrics
 
 # Dataset Paths
+cv_splits: 10
 paths:
   # Path to baseline corpus (preprocessed)
   baseline: "preprocessed_data/preprocessed_data.csv"
@@ -13,12 +14,14 @@ paths:
   output_dir: "results/deleaking_evaluation"
 
 # TF-IDF Feature Engineering Parameters
-# Critical: No stop word removal to preserve stylometric features
-tfidf:
-  ngram_range: [1, 2]  # Unigrams and bigrams
-  max_features: 10000   # Maximum vocabulary size
-  min_df: 5             # Minimum document frequency (filters rare terms)
-  sublinear_tf: true    # Use log-scaled term frequency (1 + log(tf))
+tokenizer:
+  analyzer: word
+  ngram_range: [1, 3]
+  min_df: 5
+  max_df: 0.90
+  max_features: 20_000
+  sublinear_tf: true
+  stop_words: english
 
 # Train/Eval Split Configuration
 split:
@@ -27,35 +30,30 @@ split:
 
 # Feature Analysis Parameters
 feature_analysis:
-  top_n_features: 50    # Number of top features to analyze per class
-
-# Geometric Analysis Parameters
-geometric:
-  silhouette_sample_size: 5000  # Subsample size for silhouette computation (performance)
+  top_n_list: [5, 10, 20, 50, 100]    # Number of top features to analyze per class
 
 # Model Configurations
-# Three classifiers with varying regularization strategies
+# Four classifiers with varying regularization strategies
 models:
-  LogReg_NoReg:
-    class: LogisticRegression
-    params:
-      C: 10000000000    # Effectively no regularization (C=1e10)
-      max_iter: 1000
-      random_state: 42
-
-  LogReg_L2:
-    class: LogisticRegression
-    params:
-      penalty: l2       # L2 regularization (Ridge)
-      C: 1.0            # Standard regularization strength
-      max_iter: 1000
-      random_state: 42
+#  LogReg:
+#    class: LogisticRegression
+#    params:
+#      l1_ratio: 0.12946449960792616
+#      C: 7.452728202178298
+#      tol: 2.2948373797864634e-05
+#      max_iter: 648
+#      solver: saga
+#      random_state: 42
 
   SVM:
     class: LinearSVC
     params:
-      loss: squared_hinge   # Squared hinge loss for smooth optimization
-      max_iter: 1000
+      C: 0.03727993786644206
+      loss: squared_hinge
+      tol: 0.000167147053137376
+      max_iter: 1278
+      dual: auto
+      class_weight: balanced
       random_state: 42
 
 # Expected Outcomes

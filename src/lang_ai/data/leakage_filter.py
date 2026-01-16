@@ -19,17 +19,13 @@ class LeakageFilter(TextFilter):
 
     # Country list
     countries: List[str] = [
-        item
-        for c in pycountry.countries
-        for item in (
-            [c.name]
-            + (
-                [getattr(c, "official_name", None)]
-                if (getattr(c, "official_name", None))
-                else []
-            )
-        )
-    ]
+       name for c in pycountry.countries
+       for name in [c.name, getattr(c, "official_name", None)] if name
+   ] + [
+       "auckland", "montana", "macedonian", "indian", "taiwanese",
+       "vietnamese", "korean", "chinese", "japanese", "filipino",
+       "kentucky", "lithuanian"
+   ]
 
     # Community-specific slang (PCM/political compass memes, Reddit-specific)
     community_specific_slang: List[str] = [
@@ -183,6 +179,11 @@ class LeakageFilter(TextFilter):
         "Libtard",
         "Orange man",
         "fuck Joe Biden",
+        "monke",
+        "queer",
+        "trans people",
+        "gay people",
+        "transgender people"
     ]
 
     # Pejoratives and derogatory terms
@@ -257,11 +258,14 @@ class LeakageFilter(TextFilter):
         "woke media",
         "Succs",
         "Succ",
+        "zef",
+        "centrists"
     ]
 
     # Named entities (politicians, public figures)
     named_entities: List[str] = [
         "Trump",
+        "trumps"
         "Biden",
         "Putin",
         "Rittenhouse",
@@ -409,6 +413,7 @@ class LeakageFilter(TextFilter):
         "Oz",
         "Stalin",
         "Chauvin",
+        "Messi"
     ]
 
     # Self-identification phrases
@@ -454,6 +459,7 @@ class LeakageFilter(TextFilter):
         "islam",
         "christofascists",
         "Bible Belt",
+        "orthodox"
     ]
 
     # Real political ideology terms

@@ -15,6 +15,15 @@ paths:
   # Directory for evaluation results (relative to project root)
   results: "results/deleaking_evaluation"
 
+  # Path to baseline corpus (preprocessed)
+  baseline: "preprocessed_data/preprocessed_data.csv"
+
+  # Path to sanitized corpus (deleaked)
+  sanitized: "preprocessed_data/deleaked_data.csv"
+
+  # Output directory for comparison results
+  output_dir: "results/deleaking_evaluation"
+
 # Pipeline Steps Configuration
 # These can be controlled via command-line flags for enable/disable functionality
 pipeline:
@@ -27,22 +36,65 @@ pipeline:
   # Whether to run evaluation step
   run_evaluation: true
 
-# Usage Examples:
+# Evaluation Configuration for Deleaking Methodology Assessment
+# This configuration controls TF-IDF feature engineering, model training, and evaluation metrics
+
+# Dataset Paths
+cv_splits: 10
+
+# TF-IDF Feature Engineering Parameters
+tokenizer:
+  analyzer: word
+  ngram_range: [1, 3]
+  min_df: 5
+  max_df: 0.90
+  max_features: 20_000
+  sublinear_tf: true
+  stop_words: english
+
+# Train/Eval Split Configuration
+split:
+  train_size: 0.9       # 90% training, 10% evaluation
+  random_state: 42      # Fixed seed for reproducibility
+
+# Feature Analysis Parameters
+feature_analysis:
+  top_n_list: [5, 10, 20, 50, 100]    # Number of top features to analyze per class
+
+# Model Configurations
+# Four classifiers with varying regularization strategies
+models:
+#  LogReg:
+#    class: LogisticRegression
+#    params:
+#      l1_ratio: 0.12946449960792616
+#      C: 7.452728202178298
+#      tol: 2.2948373797864634e-05
+#      max_iter: 648
+#      solver: saga
+#      random_state: 42
+
+  SVM:
+    class: LinearSVC
+    params:
+      C: 0.03727993786644206
+      loss: squared_hinge
+      tol: 0.000167147053137376
+      max_iter: 1278
+      dual: auto
+      class_weight: balanced
+      random_state: 42
+
+# Expected Outcomes
 #
-# 1. Run full pipeline with default config:
-#    python run_model_pipeline.py
+# For sanitized corpus compared to baseline:
+# 1. Stylometric Ratio: INCREASE (more function words in top features)
+# 2. Silhouette Score: DECREASE or STABLE (less topic-driven clustering)
+# 3. Centroid Distance: DECREASE or STABLE (classes less separable by topic)
+# 4. Macro F1: SLIGHT DECREASE acceptable (trade-off for better stylometry)
+# 5. Feature Jaccard: LOW (different features between baseline/sanitized)
 #
-# 2. Skip preprocessing (use existing preprocessed data):
-#    python run_model_pipeline.py --skip-preprocessing
-#
-# 3. Skip deleakage (use existing deleaked data):
-#    python run_model_pipeline.py --skip-deleakage
-#
-# 4. Only run evaluation:
-#    python run_model_pipeline.py --only-evaluation
-#
-# 5. Override paths via Hydra:
-#    python run_model_pipeline.py paths.raw_data=custom_data/input.csv
-#
-# 6. Override multiple paths:
-#    python run_model_pipeline.py paths.raw_data=data/custom.csv paths.results=results/experiment_001
+# Interpretation Guide:
+# - High stylometric ratio = More author style-based classification
+# - Low silhouette score = Less cohesive topic clusters (good for deleaking)
+# - Low Jaccard similarity = Successful shift from topic to style features

@@ -20,6 +20,8 @@ dependencies = [
     "pycountry>=24.6.1",
     "optuna>=4.6.0",
     "joblib>=1.5.3",
+    "pip>=25.3",
+    "nltk>=3.9.2",
 ]
 
 [dependency-groups]
