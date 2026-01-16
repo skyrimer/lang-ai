@@ -43,85 +43,85 @@ class ProjectPaths:
         return Path(__file__).resolve().parent.parent.parent.parent
 
     @staticmethod
-    def raw_data(subpath: str = "") -> Path:
+    def raw_data(subpath: str | Path = "") -> Path:
         """
         Get raw data directory or subdirectory.
 
         Args:
-            subpath: Optional subdirectory within raw_data/
+            subpath: Optional subdirectory within raw_data/.
 
         Returns:
-            Path to raw_data/ or raw_data/{subpath}
+            Path to raw_data/ or raw_data/{subpath}.
         """
         base = ProjectPaths.root() / "raw_data"
         return base / subpath if subpath else base
 
     @staticmethod
-    def preprocessed_data(subpath: str = "") -> Path:
+    def preprocessed_data(subpath: str | Path = "") -> Path:
         """
         Get preprocessed data directory or subdirectory.
 
         Args:
-            subpath: Optional subdirectory within preprocessed_data/
+            subpath: Optional subdirectory within preprocessed_data/.
 
         Returns:
-            Path to preprocessed_data/ or preprocessed_data/{subpath}
+            Path to preprocessed_data/ or preprocessed_data/{subpath}.
         """
         base = ProjectPaths.root() / "preprocessed_data"
         return base / subpath if subpath else base
 
     @staticmethod
-    def results(subpath: str = "") -> Path:
+    def results(subpath: str | Path = "") -> Path:
         """
         Get results directory or subdirectory.
 
         Args:
-            subpath: Optional subdirectory within results/
+            subpath: Optional subdirectory within results/.
 
         Returns:
-            Path to results/ or results/{subpath}
+            Path to results/ or results/{subpath}.
         """
         base = ProjectPaths.root() / "results"
         return base / subpath if subpath else base
 
     @staticmethod
-    def configs(subpath: str = "") -> Path:
+    def configs(subpath: str | Path = "") -> Path:
         """
         Get configs directory or subdirectory.
 
         Args:
-            subpath: Optional subdirectory within configs/
+            subpath: Optional subdirectory within configs/.
 
         Returns:
-            Path to configs/ or configs/{subpath}
+            Path to configs/ or configs/{subpath}.
         """
         base = ProjectPaths.root() / "configs"
         return base / subpath if subpath else base
 
     @staticmethod
-    def prompts(subpath: str = "") -> Path:
+    def prompts(subpath: str | Path = "") -> Path:
         """
         Get prompts directory or subdirectory.
 
         Args:
-            subpath: Optional subdirectory within prompts/
+            subpath: Optional subdirectory within prompts/.
 
         Returns:
-            Path to prompts/ or prompts/{subpath}
+            Path to prompts/ or prompts/{subpath}.
         """
         base = ProjectPaths.root() / "prompts"
         return base / subpath if subpath else base
 
     @staticmethod
-    def notebooks(subpath: str = "") -> Path:
+    def notebooks(subpath: str | Path = "") -> Path:
         """
         Get notebooks directory or subdirectory.
 
         Args:
-            subpath: Optional subdirectory within notebooks/
+            subpath: Optional subdirectory within notebooks/.
 
         Returns:
-            Path to notebooks/ or notebooks/{subpath}
+            Path to notebooks/ or notebooks/{subpath}.
         """
         base = ProjectPaths.root() / "notebooks"
         return base / subpath if subpath else base
@@ -155,45 +155,46 @@ class ProjectPaths:
         return ProjectPaths.preprocessed_data(f"{sample_name}.csv")
 
     @staticmethod
-    def judge_results_dir(subdir: Optional[str] = None) -> Path:
+    def judge_results_dir(subdir: Optional[str | Path] = None) -> Path:
         """
         Get judge results directory.
 
         Args:
-            subdir: Optional subdirectory within results/
+            subdir: Optional subdirectory within results/.
 
         Returns:
-            Path to results/ or results/{subdir}
+            Path to results/ or results/{subdir}.
         """
         if subdir:
             return ProjectPaths.results(subdir)
         return ProjectPaths.results()
 
     @staticmethod
-    def evaluation_results_dir(subdir: str = "deleaking_evaluation") -> Path:
+    def evaluation_results_dir(subdir: str | Path = "deleaking_evaluation") -> Path:
         """
         Get evaluation results directory.
 
         Args:
-            subdir: Subdirectory name (default: "deleaking_evaluation")
+            subdir: Subdirectory name (default: "deleaking_evaluation").
 
         Returns:
-            Path to results/{subdir}
+            Path to results/{subdir}.
         """
         return ProjectPaths.results(subdir)
 
     @staticmethod
-    def ensure_exists(path: Path, is_file: bool = False) -> Path:
+    def ensure_exists(path: Path | str, is_file: bool = False) -> Path:
         """
         Ensure directory exists (create if needed).
 
         Args:
-            path: Path to directory or file
-            is_file: If True, create parent directory instead of path itself
+            path: Path to directory or file.
+            is_file: If True, create parent directory instead of path itself.
 
         Returns:
-            The input path (for chaining)
+            The input path (for chaining) as a Path object.
         """
+        path = Path(path)
         target = path.parent if is_file else path
         target.mkdir(parents=True, exist_ok=True)
         return path

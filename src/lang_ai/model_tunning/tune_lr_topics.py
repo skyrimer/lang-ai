@@ -14,19 +14,19 @@ Features:
 import argparse
 import json
 import logging
-import numpy as np
+from itertools import combinations
+from pathlib import Path
+from typing import Dict, List, Set
+
 import joblib
+import numpy as np
 import optuna
 import pandas as pd
-from pathlib import Path
-from itertools import combinations
-from typing import List, Set, Dict
-
 from optuna.trial import Trial
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import f1_score
 from sklearn.model_selection import StratifiedGroupKFold
-from sklearn.linear_model import LogisticRegression
 
 # Configure logging
 logging.basicConfig(
@@ -113,7 +113,9 @@ class LogisticRegressionTuner:
         self.X = self.vectorizer.fit_transform(df["post"].tolist())
         logger.info(f"Feature matrix shape: {self.X.shape}")
 
-    def calculate_jaccard_stability(self, fold_top_features: List[Dict[int, Set[int]]]) -> float:
+    def calculate_jaccard_stability(
+        self, fold_top_features: List[Dict[int, Set[int]]]
+    ) -> float:
         """
         Computes the mean Jaccard overlap of top features between all pairs of folds.
 
@@ -171,7 +173,9 @@ class LogisticRegressionTuner:
         fold_top_features = []  # To store top feature indices per fold
 
         # Loop over folds
-        for fold_idx, (train_idx, val_idx) in enumerate(cv.split(self.X, self.y, groups=self.groups)):
+        for fold_idx, (train_idx, val_idx) in enumerate(
+            cv.split(self.X, self.y, groups=self.groups)
+        ):
             X_train_fold, X_val_fold = self.X[train_idx], self.X[val_idx]
             y_train_fold, y_val_fold = self.y[train_idx], self.y[val_idx]
 
@@ -189,13 +193,19 @@ class LogisticRegressionTuner:
             top_feats_indices = {}
             if model.coef_.ndim == 1:
                 # Binary case: Class 1 is positive (high coef), Class 0 is negative (low coef)
-                top_feats_indices[1] = set(np.argsort(model.coef_)[-50:])  # Most positive
-                top_feats_indices[0] = set(np.argsort(model.coef_)[:50])   # Most negative
+                top_feats_indices[1] = set(
+                    np.argsort(model.coef_)[-50:]
+                )  # Most positive
+                top_feats_indices[0] = set(
+                    np.argsort(model.coef_)[:50]
+                )  # Most negative
             else:
                 # Multiclass case
                 for cls_idx in range(model.coef_.shape[0]):
                     # Get indices of top 50 largest coefficients
-                    top_feats_indices[cls_idx] = set(np.argsort(model.coef_[cls_idx])[-50:])
+                    top_feats_indices[cls_idx] = set(
+                        np.argsort(model.coef_[cls_idx])[-50:]
+                    )
 
             fold_top_features.append(top_feats_indices)
 
@@ -214,7 +224,9 @@ class LogisticRegressionTuner:
         return mean_f1
 
     def run_optimization(self) -> optuna.Study:
-        logger.info(f"Starting CV Optimization ({self.n_folds} folds, {self.n_trials} trials)")
+        logger.info(
+            f"Starting CV Optimization ({self.n_folds} folds, {self.n_trials} trials)"
+        )
         logger.info(f"Study DB: {self.storage_path}")
 
         sampler = optuna.samplers.TPESampler(seed=self.random_state, multivariate=True)
@@ -227,7 +239,12 @@ class LogisticRegressionTuner:
             load_if_exists=True,
         )
 
-        study.optimize(self.objective, n_trials=self.n_trials, show_progress_bar=True, n_jobs=self.n_jobs)
+        study.optimize(
+            self.objective,
+            n_trials=self.n_trials,
+            show_progress_bar=True,
+            n_jobs=self.n_jobs,
+        )
 
         logger.info("Optimization Complete.")
         logger.info(f"Best Mean F1: {study.best_value:.4f}")
@@ -236,7 +253,9 @@ class LogisticRegressionTuner:
         best_trial = study.best_trial
         logger.info(f"Best Params: {best_trial.params}")
         logger.info(f"F1 Std Dev: {best_trial.user_attrs.get('std_f1', 0):.4f}")
-        logger.info(f"Feature Stability (Jaccard): {best_trial.user_attrs.get('jaccard_stability', 0):.4f}")
+        logger.info(
+            f"Feature Stability (Jaccard): {best_trial.user_attrs.get('jaccard_stability', 0):.4f}"
+        )
 
         self.best_params = study.best_params
         return study
@@ -279,10 +298,12 @@ class LogisticRegressionTuner:
             "best_params": study.best_params,
             "stability_metrics": {
                 "std_f1": study.best_trial.user_attrs.get("std_f1"),
-                "jaccard_stability": study.best_trial.user_attrs.get("jaccard_stability")
+                "jaccard_stability": study.best_trial.user_attrs.get(
+                    "jaccard_stability"
+                ),
             },
             "n_trials": len(study.trials),
-            "n_folds": self.n_folds
+            "n_folds": self.n_folds,
         }
 
         with open(self.output_dir / "study_summary.json", "w") as f:
@@ -301,8 +322,12 @@ class LogisticRegressionTuner:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Tune Logistic Regression with CV and Stability Analysis")
-    parser.add_argument("--data", type=str, default="preprocessed_data/preprocessed_data.csv")
+    parser = argparse.ArgumentParser(
+        description="Tune Logistic Regression with CV and Stability Analysis"
+    )
+    parser.add_argument(
+        "--data", type=str, default="preprocessed_data/preprocessed_data.csv"
+    )
     parser.add_argument("--output", type=str, default="outputs/logreg_cv_stability")
     parser.add_argument("--study-name", type=str, default="logreg_cv_stability")
     parser.add_argument("--n-trials", type=int, default=100)

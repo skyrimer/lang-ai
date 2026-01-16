@@ -1,12 +1,24 @@
 """
 Text normalization utilities for cleaning and standardizing Reddit posts.
+
+Provides high-precision regex patterns and normalization functions to replace
+non-stylometric elements (URLs, emails, mentions, etc.) with standardized tokens,
+preserving only the stylistic signals needed for authorship attribution.
+
+Key Features:
+    - Django-inspired URL/email validation patterns for high precision
+    - Reddit-specific patterns (u/username, r/subreddit)
+    - Markdown and special character cleanup
+    - Token-based replacement to preserve text structure
+
+Module-level regex patterns are defined for reuse across normalizer instances.
 """
 
 import html
 import re
 import unicodedata
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 # ----------------------------
 # URL (Django URLValidator core pieces)
@@ -104,12 +116,21 @@ regex_filepaths = (
 
 class TextNormalizer(BaseModel):
     """
-    Normalizes text by replacing non-stylometric elements (URLs, emails, etc.) with tokens
-    and cleaning up Reddit-specific formatting.
+    Text normalizer for stylometric preprocessing of Reddit posts.
+
+    Replaces non-stylometric content (URLs, emails, usernames) with standardized
+    tokens while preserving linguistic style markers. Cleans Reddit-specific
+    Markdown formatting to ensure consistent text representation.
+
+    Example:
+        >>> normalizer = TextNormalizer()
+        >>> text = "Check out https://example.com!"
+        >>> normalizer.normalize_text(text)
+        'Check out [URL]!'
     """
 
-    prefix: str = "["
-    suffix: str = "]"
+    prefix: str = Field(default="[", description="Token prefix")
+    suffix: str = Field(default="]", description="Token suffix")
 
     non_stylometric_matching: dict[str, str] = {
         "URL": regex_url,
@@ -140,15 +161,23 @@ class TextNormalizer(BaseModel):
 
     def normalize_text(self, text: str) -> str:
         """
-        Applies normalization steps to the input text, including unescaping HTML,
-        normalizing unicode, and replacing non-stylometric elements with tokens.
+        Applies normalization steps to the input text.
+
+        Includes:
+        1. HTML unescaping (e.g., &amp; -> &).
+        2. Unicode normalization (NFKD).
+        3. Reddit-specific formatting removal (Markdown links, headers, etc.).
+        4. Replacement of non-stylometric elements (URLs, emails, etc.) with tokens.
 
         Args:
-            text (str): The raw text to normalize.
+            text: The raw text to normalize.
 
         Returns:
-            str: The normalized text with tokens and cleaned formatting.
+            The normalized text with tokens and cleaned formatting.
         """
+        if not isinstance(text, str):
+            return ""
+
         # Unescape HTML entities (e.g., &amp; -> &, &gt; -> >)
         text = html.unescape(text)
         text = unicodedata.normalize("NFKD", text)

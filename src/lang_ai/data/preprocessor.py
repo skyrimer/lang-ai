@@ -131,13 +131,21 @@ def normalize_post_size(
 
 def most_common_word_ratio(text: str) -> float:
     """
-    Computes the ratio of the most frequent word in the text.
+    Compute the ratio of the most frequently occurring word in text.
+
+    Used to detect repetitive or spam content where a single word
+    dominates the text (e.g., "word word word...").
 
     Args:
-        text (str): The input text.
+        text: Input text string
 
     Returns:
-        float: The ratio of the most frequent word's count to the total word count.
+        Ratio of the most common word's count to total word count (0.0-1.0).
+        Returns 0.0 for empty text.
+
+    Example:
+        >>> most_common_word_ratio("hello hello world")
+        0.666...  # "hello" appears 2 out of 3 times
     """
     words = text.split()
     if not words:
@@ -149,13 +157,21 @@ def most_common_word_ratio(text: str) -> float:
 
 def non_standard_word_ratio(text: str) -> float:
     """
-    Computes the ratio of non-alphanumeric words in the text.
+    Compute the ratio of non-alphanumeric tokens in text.
+
+    Used to detect noisy content with excessive special characters,
+    emojis, or malformed text (e.g., "!@#$ *** %%%").
 
     Args:
-        text (str): The input text.
+        text: Input text string
 
     Returns:
-        float: The ratio of non-alphanumeric words to the total word count.
+        Ratio of non-alphanumeric words to total word count (0.0-1.0).
+        Returns 0.0 for empty text.
+
+    Example:
+        >>> non_standard_word_ratio("hello !!! ??? world")
+        0.5  # 2 out of 4 tokens are non-alphanumeric
     """
     words = text.split()
     if not words:
@@ -167,14 +183,20 @@ def filter_by_non_standard_ratio(
     df: pd.DataFrame, threshold: float = 0.4
 ) -> pd.DataFrame:
     """
-    Filters the DataFrame for posts that have a non-standard word ratio less than the threshold.
+    Filter posts by non-standard word ratio.
+
+    Removes posts where more than threshold fraction of words are
+    non-alphanumeric, indicating noisy or low-quality content.
 
     Args:
-        df (pd.DataFrame): The input DataFrame.
-        threshold (float): Maximum allowed non-standard word ratio. Defaults to 0.4.
+        df: Input DataFrame with 'post' column
+        threshold: Maximum allowed ratio of non-alphanumeric words (default: 0.4)
 
     Returns:
-        pd.DataFrame: The filtered DataFrame.
+        Filtered DataFrame excluding posts above threshold
+
+    Example:
+        With threshold=0.4, keeps posts where ≤40% of words are non-alphanumeric
     """
     df_filtered = df.copy()
     df_filtered["non_standard_word_ratio"] = df_filtered["post"].swifter.apply(
@@ -190,14 +212,22 @@ def remove_common_word_by_ratio(
     df: pd.DataFrame, threshold: float = 0.3
 ) -> pd.DataFrame:
     """
-    Removes the most common word from posts where its ratio exceeds the threshold.
+    Sanitize repetitive posts by removing dominant words.
+
+    If a single word appears more than threshold fraction of total words,
+    remove all instances of that word. This helps filter spam or bot posts
+    that repeat the same word excessively.
 
     Args:
-        df (pd.DataFrame): The input DataFrame.
-        threshold (float): Minimum ratio to trigger removal. Defaults to 0.3.
+        df: Input DataFrame with 'post' column
+        threshold: Minimum ratio to trigger word removal (default: 0.3)
 
     Returns:
-        pd.DataFrame: The DataFrame with cleaned posts.
+        DataFrame with sanitized posts
+
+    Example:
+        With threshold=0.3, if "SPAM" appears >30% of the time in a post,
+        all instances of "SPAM" are removed from that post.
     """
     df_cleaned = df.copy()
 
@@ -207,13 +237,14 @@ def remove_common_word_by_ratio(
 
     def sanitize_text(row: pd.Series) -> str:
         """
-        Sanitizes a single row by removing the most common word if it exceeds the threshold.
+        Sanitize a single row by removing dominant word if above threshold.
 
         Args:
-            row (pd.Series): The row containing 'post' and 'most_common_word_ratio'.
+            row: Series containing 'post' and 'most_common_word_ratio' fields
 
         Returns:
-            str: The sanitized text.
+            Sanitized text with dominant word removed, or original text if
+            no word exceeds threshold
         """
         if row["most_common_word_ratio"] > threshold:
             words = row["post"].split()
@@ -233,22 +264,28 @@ def remove_common_word_by_ratio(
 
 class PreprocessingSteps(BaseModel):
     """
-    Represents a series of preprocessing steps to be applied to a DataFrame.
+    Container for preprocessing pipeline steps.
+
+    Manages an ordered sequence of preprocessing functions to be applied
+    to a DataFrame, with logging and progress tracking.
     """
 
     steps: list[tuple[str, Callable[[pd.DataFrame], pd.DataFrame]]] = Field(
-        default_factory=list
+        default_factory=list, description="List of (name, function) tuples"
     )
 
     def run_steps(self, df: pd.DataFrame) -> pd.DataFrame:
         """
-        Executes all registered preprocessing steps.
+        Execute all registered preprocessing steps in sequence.
 
         Args:
-            df (pd.DataFrame): The input DataFrame.
+            df: Input DataFrame
 
         Returns:
-            pd.DataFrame: The preprocessed DataFrame.
+            Preprocessed DataFrame after applying all steps
+
+        Note:
+            Each step logs its name before and after execution
         """
         logger.info("Running preprocessing steps...")
         for step_name, step_func in self.steps:
@@ -261,30 +298,56 @@ class PreprocessingSteps(BaseModel):
 
 class DataPreprocessor(BasePipeline):
     """
-    Preprocessing pipeline for raw data.
+    Preprocessing pipeline for stylometric analysis.
 
-    Inherits from BasePipeline and applies a series of preprocessing steps.
+    Applies comprehensive data cleaning to prepare Reddit posts for
+    authorship attribution by removing pollution (bots, ads, AI-generated),
+    normalizing text, deduplicating similar content, and enforcing quality
+    constraints while preserving stylometric signals.
+
+    Pipeline steps:
+        1. Fix column typos
+        2. Clean content (normalize URLs, emails, etc.)
+        3. Remove exact duplicates
+        4. Filter by non-standard word ratio
+        5. Remove messy posts (bots, ads, AI)
+        6. Remove repetitive wording
+        7. Normalize post size
+        8. Deduplicate similar posts
+
+    Attributes:
+        input_path: Path to raw data file
+        output_path: Path to save preprocessed data
+        preprocessing_steps: Ordered sequence of preprocessing functions
     """
 
     # Use Pydantic Field with default_factory for dynamic defaults
-    input_path: Path = Field(
-        default_factory=lambda: ProjectPaths.political_leaning_csv()
+    input_path: Path | str = Field(
+        default_factory=lambda: ProjectPaths.political_leaning_csv(),
+        description="Path to raw input data",
     )
-    output_path: Path = Field(default_factory=lambda: ProjectPaths.preprocessed_csv())
+    output_path: Path | str = Field(
+        default_factory=lambda: ProjectPaths.preprocessed_csv(),
+        description="Path to save preprocessed output",
+    )
 
     preprocessing_steps: PreprocessingSteps = Field(
-        default_factory=lambda: PreprocessingSteps(steps=[])
+        default_factory=lambda: PreprocessingSteps(steps=[]),
+        description="Container for preprocessing step functions",
     )
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
         """
-        Apply preprocessing steps to DataFrame.
+        Apply all preprocessing steps to DataFrame.
 
         Args:
-            df: Input DataFrame
+            df: Raw input DataFrame
 
         Returns:
-            Preprocessed DataFrame
+            Cleaned and preprocessed DataFrame ready for analysis
+
+        Note:
+            Logs shape changes and statistics after each step
         """
         logger.info("Applying preprocessing steps...")
         df_preprocessed = self.preprocessing_steps.run_steps(df)
@@ -293,15 +356,31 @@ class DataPreprocessor(BasePipeline):
 
 
 def preprocess_data(
-    data_url: Path = ProjectPaths.political_leaning_csv(),
-    output_path: Path = ProjectPaths.preprocessed_csv(),
+    data_url: Path | str = ProjectPaths.political_leaning_csv(),
+    output_path: Path | str = ProjectPaths.preprocessed_csv(),
 ) -> None:
     """
-    Main entry point for the preprocessing script.
+    Execute the full preprocessing pipeline.
+
+    Main entry point that instantiates and runs the preprocessing pipeline
+    with standard steps for stylometric analysis preparation.
 
     Args:
-        data_url: Path to the raw data file (defaults to ProjectPaths.political_leaning_csv())
-        output_path: Path where the preprocessed data will be saved (defaults to ProjectPaths.preprocessed_csv())
+        data_url: Path to raw data file (default: ProjectPaths.political_leaning_csv())
+        output_path: Path to save preprocessed data (default: ProjectPaths.preprocessed_csv())
+
+    Pipeline Steps:
+        1. Fix column typos (e.g., auhtor_ID -> author)
+        2. Clean content (normalize URLs, emails, mentions)
+        3. Remove exact duplicate posts
+        4. Filter by non-standard word ratio (<40% special chars)
+        5. Remove messy posts (bots, ads, AI-generated)
+        6. Remove repetitive wording (single word >30% of content)
+        7. Filter by post size (min 300 words, max 10k chars)
+        8. Deduplicate similar posts (Jaccard >0.8)
+
+    Note:
+        See individual step functions for detailed documentation of each filter
     """
     steps = [
         ("Fixing column typo", fix_typo),

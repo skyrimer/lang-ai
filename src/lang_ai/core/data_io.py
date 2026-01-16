@@ -25,22 +25,22 @@ class DataLoader:
 
     @staticmethod
     def load_csv(
-        path: Path, required_columns: Optional[List[str]] = None, **kwargs
+        path: Path | str, required_columns: Optional[List[str]] = None, **kwargs
     ) -> pd.DataFrame:
         """
         Load CSV file with validation and error handling.
 
         Args:
-            path: Path to CSV file
-            required_columns: List of columns that must be present (optional)
-            **kwargs: Additional arguments passed to pd.read_csv
+            path: Path to CSV file.
+            required_columns: List of columns that must be present (optional).
+            **kwargs: Additional arguments passed to pd.read_csv.
 
         Returns:
-            Loaded DataFrame
+            Loaded DataFrame.
 
         Raises:
-            FileNotFoundError: If file doesn't exist
-            ValueError: If required columns are missing
+            FileNotFoundError: If file doesn't exist.
+            ValueError: If required columns are missing.
         """
         path = Path(path)
 
@@ -72,7 +72,7 @@ class DataLoader:
 
     @staticmethod
     def load_json(
-        path: Path,
+        path: Path | str,
         lines: bool = True,
         required_columns: Optional[List[str]] = None,
         **kwargs,
@@ -81,17 +81,17 @@ class DataLoader:
         Load JSON file with validation and error handling.
 
         Args:
-            path: Path to JSON file
-            lines: If True, load as JSON lines format (one JSON object per line)
-            required_columns: List of columns that must be present (optional)
-            **kwargs: Additional arguments passed to pd.read_json
+            path: Path to JSON file.
+            lines: If True, load as JSON lines format (one JSON object per line).
+            required_columns: List of columns that must be present (optional).
+            **kwargs: Additional arguments passed to pd.read_json.
 
         Returns:
-            Loaded DataFrame
+            Loaded DataFrame.
 
         Raises:
-            FileNotFoundError: If file doesn't exist
-            ValueError: If required columns are missing
+            FileNotFoundError: If file doesn't exist.
+            ValueError: If required columns are missing.
         """
         path = Path(path)
 
@@ -126,21 +126,21 @@ class DataLoader:
 
     @staticmethod
     def load_dataframe(
-        path: Path, required_columns: Optional[List[str]] = None, **kwargs
+        path: Path | str, required_columns: Optional[List[str]] = None, **kwargs
     ) -> pd.DataFrame:
         """
         Auto-detect file format and load DataFrame.
 
         Args:
-            path: Path to data file (.csv or .json)
-            required_columns: List of columns that must be present (optional)
-            **kwargs: Additional arguments passed to pandas read functions
+            path: Path to data file (.csv or .json).
+            required_columns: List of columns that must be present (optional).
+            **kwargs: Additional arguments passed to pandas read functions.
 
         Returns:
-            Loaded DataFrame
+            Loaded DataFrame.
 
         Raises:
-            ValueError: If file format not supported
+            ValueError: If file format not supported.
         """
         path = Path(path)
         suffix = path.suffix.lower()
@@ -156,19 +156,19 @@ class DataLoader:
 
     @staticmethod
     def save_csv(
-        df: pd.DataFrame, path: Path, create_dirs: bool = True, **kwargs
+        df: pd.DataFrame, path: Path | str, create_dirs: bool = True, **kwargs
     ) -> None:
         """
         Save DataFrame to CSV with automatic directory creation.
 
         Args:
-            df: DataFrame to save
-            path: Output path for CSV file
-            create_dirs: If True, create parent directories if they don't exist
-            **kwargs: Additional arguments passed to df.to_csv
+            df: DataFrame to save.
+            path: Output path for CSV file.
+            create_dirs: If True, create parent directories if they don't exist.
+            **kwargs: Additional arguments passed to df.to_csv.
 
         Raises:
-            OSError: If directory creation or file writing fails
+            OSError: If directory creation or file writing fails.
         """
         path = Path(path)
 
@@ -189,7 +189,7 @@ class DataLoader:
     @staticmethod
     def save_json(
         df: pd.DataFrame,
-        path: Path,
+        path: Path | str,
         create_dirs: bool = True,
         orient: str = "records",
         lines: bool = True,
@@ -199,15 +199,15 @@ class DataLoader:
         Save DataFrame to JSON with automatic directory creation.
 
         Args:
-            df: DataFrame to save
-            path: Output path for JSON file
-            create_dirs: If True, create parent directories if they don't exist
-            orient: Format of JSON string (default: 'records')
-            lines: If True, write as JSON lines format
-            **kwargs: Additional arguments passed to df.to_json
+            df: DataFrame to save.
+            path: Output path for JSON file.
+            create_dirs: If True, create parent directories if they don't exist.
+            orient: Format of JSON string (default: 'records').
+            lines: If True, write as JSON lines format.
+            **kwargs: Additional arguments passed to df.to_json.
 
         Raises:
-            OSError: If directory creation or file writing fails
+            OSError: If directory creation or file writing fails.
         """
         path = Path(path)
 
@@ -227,19 +227,19 @@ class DataLoader:
 
     @staticmethod
     def append_to_csv(
-        df: pd.DataFrame, path: Path, create_dirs: bool = True, **kwargs
+        df: pd.DataFrame, path: Path | str, create_dirs: bool = True, **kwargs
     ) -> None:
         """
         Append DataFrame to existing CSV file or create new one.
 
         Args:
-            df: DataFrame to append
-            path: Output path for CSV file
-            create_dirs: If True, create parent directories if they don't exist
-            **kwargs: Additional arguments passed to df.to_csv
+            df: DataFrame to append.
+            path: Output path for CSV file.
+            create_dirs: If True, create parent directories if they don't exist.
+            **kwargs: Additional arguments passed to df.to_csv.
 
         Raises:
-            OSError: If directory creation or file writing fails
+            OSError: If directory creation or file writing fails.
         """
         path = Path(path)
 

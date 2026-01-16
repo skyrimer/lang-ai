@@ -10,7 +10,6 @@ This pipeline orchestrates:
 from pathlib import Path
 
 import hydra
-from hydra import compose, initialize_config_dir
 from omegaconf import DictConfig
 
 from src.lang_ai.core.logger import setup_logging

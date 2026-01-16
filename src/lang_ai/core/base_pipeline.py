@@ -29,8 +29,8 @@ class BasePipeline(BaseModel, ABC):
         output_path: Path to save transformed data
     """
 
-    input_path: Path = Field(..., description="Path to input data file")
-    output_path: Path = Field(..., description="Path to save output data")
+    input_path: Path | str = Field(..., description="Path to input data file")
+    output_path: Path | str = Field(..., description="Path to save output data")
 
     def load_data(self) -> pd.DataFrame:
         """

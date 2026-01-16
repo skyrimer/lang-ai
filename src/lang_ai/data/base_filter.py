@@ -145,17 +145,17 @@ class TextFilter(BaseModel, ABC):
         Apply filters to DataFrame.
 
         Args:
-            df: Input DataFrame containing text column
-            categories: List of category names to filter, or "all" for all categories
+            df: Input DataFrame containing text column.
+            categories: List of category names to filter, or "all" for all categories defined in get_filter_patterns().
 
         Returns:
             Tuple of (filtered_df, statistics_dict)
-            - filtered_df: DataFrame with filters applied
-            - statistics_dict: Category labels -> count of matches
+            - filtered_df: DataFrame with filters applied.
+            - statistics_dict: Category labels -> count of matches/rows removed.
 
         Raises:
-            ValueError: If category not found in patterns
-            KeyError: If text_column not found in DataFrame
+            ValueError: If a specified category is not found in patterns.
+            KeyError: If the configured text_column is not found in the DataFrame.
         """
         if self.text_column not in df.columns:
             raise KeyError(

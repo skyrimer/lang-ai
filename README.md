@@ -1,4 +1,4 @@
-# Lang-AI: Language and AI Project
+# Language and AI Project
 
 A Python project for stylometric analysis, data preprocessing, and LLM-based evaluation of Reddit posts.
 
@@ -17,9 +17,6 @@ A Python project for stylometric analysis, data preprocessing, and LLM-based eva
 7. [Preprocessing Pipeline Details](#preprocessing-pipeline-details)
 8. [LLM-as-a-Judge](#llm-as-a-judge)
 9. [Advanced Usage](#advanced-usage)
-10. [Common Issues & Troubleshooting](#common-issues--troubleshooting)
-11. [Judge Pipeline Upgrade](#judge-pipeline-upgrade)
-12. [License](#license)
 
 ---
 
@@ -370,20 +367,19 @@ results/deleaking_evaluation/
 
 ### Key Metrics in Output
 
-**`comparison_summary.csv`** (Quick overview):
-| Metric | Baseline | Sanitized | Change | Change % |
-|--------|----------|-----------|--------|----------|
-| Stylometric Ratio | 0.120 | 0.340 | +0.220 | +183.3% |
-| Mean Centroid Distance | 45.2 | 42.8 | -2.4 | -5.3% |
-| Silhouette Score | 0.156 | 0.142 | -0.014 | -9.0% |
-| LogReg_L2 Macro F1 | 0.823 | 0.798 | -0.025 | -3.0% |
-| Feature Overlap (Jaccard) | - | - | 0.234 | - |
+**Cross-Validation Results:**
+- **Performance Stability**: Macro F1 scores with mean ± standard deviation across folds
+- **Feature Stability Matrix**: Mean Jaccard overlap ± standard deviation for top-N features aggregated across all classes
+- **Leakage Quantification**: Jaccard overlap between baseline and deleaked consensus features per class at various top-N thresholds
+
+**Output Files:**
+- `comparative_feature_stability.csv`: Feature consistency across CV folds (baseline vs deleaked)
+- `cv_leakage_quantification.csv`: Per-class feature overlap analysis
 
 **Interpretation:**
-- ✅ **Stylometric Ratio increase** = Good (more style-based features)
-- ✅ **Low Jaccard similarity** = Good (features shifted from topic to style)
-- ⚠️ **Slight F1 drop** = Acceptable trade-off for better deleaking
-- ✅ **Lower Silhouette Score** = Good (less topic-driven clustering)
+- **Lower feature overlap** between baseline and deleaked = Successful leakage removal
+- **Consistent F1 across folds** = Stable model performance
+- **High feature stability** = Reliable feature selection
 
 ---
 
@@ -403,11 +399,9 @@ results/deleaking_evaluation/
         - `labeling_app.py`: Streamlit app for manual labeling.
         - `sampling.py`: Stratified/random sampling functionality.
     - `evaluation/`: Model evaluation and comparison.
-        - `metrics.py`: Geometric, stylometric, and feature comparison metrics.
-        - `deleaking_evaluator.py`: Main evaluator with author-aware splitting.
-        - `run_deleaking_comparison.py`: Comparison runner for baseline vs sanitized.
+        - `stability_evaluation.py`: Comparative evaluation using Stratified Group K-Fold CV.
     - `analysis/`: Algorithmic data analysis.
-        - `similarity.py`: Jaccard similarity and clustering utilities.
+        - `similarity.py`: Jaccard similarity and clustering utilities for deduplication.
     - `core/`: Shared infrastructure.
         - `models.py`: Structured data definitions (Pydantic).
         - `logger.py`: Logging setup.
@@ -515,192 +509,14 @@ deleakage_pipeline(
 ```
 
 #### Evaluation Only
-```bash
-python -m src.lang_ai.evaluation.run_deleaking_comparison \
-  --baseline preprocessed_data/preprocessed_data.csv \
-  --sanitized preprocessed_data/deleaked_data.csv \
-  --output-dir results/deleaking_evaluation
-```
-
-Or programmatically:
+Programmatically:
 ```python
 from pathlib import Path
-from src.lang_ai.evaluation.run_deleaking_comparison import run_comparison
+from src.lang_ai.evaluation.stability_evaluation import main as evaluation
 
-run_comparison(
-    baseline_path=Path("preprocessed_data/preprocessed_data.csv"),
-    sanitized_path=Path("preprocessed_data/deleaked_data.csv"),
-    output_dir=Path("results/deleaking_evaluation")
-)
+cfg = {} #your config overrides here
+evaluation(cfg)
 ```
-
----
-
-## Common Issues & Troubleshooting
-
-### Issue: "File not found: preprocessed_data/preprocessed_data.csv"
-
-**Solution:** You need to run preprocessing first:
-```bash
-python run_model_pipeline.py  # Run full pipeline
-# OR
-python -m src.lang_ai.data.preprocessor  # Preprocessing only
-```
-
----
-
-### Issue: "spaCy model 'en_core_web_sm' not found"
-
-**Solution:** Install spaCy model for stylometric analysis:
-```bash
-python -m spacy download en_core_web_sm
-```
-
----
-
-### Issue: Judge pipeline fails with API errors
-
-**Solution:** Check environment variables for API keys:
-- `GOOGLE_API_KEY` for Google models
-- `OPENROUTER_API_KEY` for OpenRouter models
-- `GROQ_API_KEY` for Groq models
-- `HF_TOKEN` for HuggingFace models
-
-Add to `.env` file:
-```bash
-GOOGLE_API_KEY=your_key_here
-OPENROUTER_API_KEY=your_key_here
-```
-
----
-
-### Issue: "Missing required columns: ['political_label']"
-
-**Solution:** Your dataset is missing required columns. Ensure your CSV has:
-- `post` (text column)
-- `political_label` (for stratified sampling)
-- `author` (for author-aware splitting)
-
-Check your data format:
-```python
-import pandas as pd
-df = pd.read_csv("your_data.csv")
-print(df.columns)  # Verify column names
-```
-
----
-
-### Issue: Evaluation takes too long
-
-**Solution:** Adjust evaluation config in `configs/evaluation_config.yaml`:
-```yaml
-# Reduce vocabulary size
-tfidf:
-  max_features: 5000  # Default: 10000
-
-# Reduce silhouette sample size
-geometric:
-  silhouette_sample_size: 2000  # Default: 5000
-
-# Reduce top features analyzed
-feature_analysis:
-  top_n_features: 25  # Default: 50
-```
-
----
-
-### Issue: Want to use different text column name
-
-**Solution:** Both filters support custom text column:
-```python
-from src.lang_ai.data.filters import PollutionFilter
-from src.lang_ai.data.leakage_filter import LeakageFilter
-
-# Use 'content' instead of 'post'
-pollution_filter = PollutionFilter(text_column="content")
-leakage_filter = LeakageFilter(text_column="content")
-```
-
----
-
-## Judge Pipeline Upgrade
-
-### Overview
-
-The judge pipeline has been enhanced from a simple multi-judge execution to a complete integrated workflow that includes sampling, multi-judge comparison, statistical analysis, best model selection, and full dataset evaluation.
-
-### What Changed
-
-#### **OLD Workflow (Deprecated)**
-```
-1. run_judge_pipeline.py → Multi-judge on sample
-2. run_analysis.py → Manual analysis (separate script)
-3. Manual identification of best model
-4. Manual run of best model on full dataset
-```
-
-#### **NEW Workflow (Integrated)**
-```
-python run_judge_pipeline.py
-
-  ├─ Step 1: Sampling (optional)
-  │    └─ Creates stratified sample from dataset
-  │
-  ├─ Step 2: Multi-judge
-  │    └─ Runs 5 models on sample for comparison
-  │
-  ├─ Step 3: Analysis
-  │    ├─ Dawid-Skene truth estimation
-  │    ├─ Krippendorff's Alpha (inter-rater reliability)
-  │    ├─ Bootstrap stability analysis (100 iterations)
-  │    └─ Identifies best model (highest DS Reliability)
-  │
-  └─ Step 4: Best Model on Full Dataset
-       └─ Automatically runs best model on entire dataset
-```
-
-### Key Enhancements
-
-1. **Integrated Analysis**: Dawid-Skene algorithm, Krippendorff's Alpha, Bootstrap stability analysis
-2. **Best Model Selection**: Automatic identification based on DS Reliability score
-3. **Automatic Full Dataset Run**: Best model automatically runs on full dataset
-4. **Flexible Execution**: Skip any step via CLI flags, manual overrides available
-
-### Migration Guide
-
-#### Old workflow:
-```bash
-# Step 1: Multi-judge
-python run_judge_pipeline.py
-
-# Step 2: Analysis (manual, separate script)
-python run_analysis.py
-
-# Step 3: Identify best model from output (manual)
-
-# Step 4: Run best model on full dataset (manual)
-python -m src.lang_ai.judge.agent \
-  --model best-model \
-  --input preprocessed_data/preprocessed_data.csv
-```
-
-#### New workflow:
-```bash
-# All steps in one command
-python run_judge_pipeline.py
-```
-
-### Backward Compatibility
-
-✅ **Still works (but deprecated):**
-- `python run_analysis.py` - Standalone analysis
-- `llmaj_config.yaml` - Old config format
-- Manual multi-judge → analysis → best model workflow
-
-❌ **No breaking changes:**
-- All existing code continues to function
-- Deprecation warnings guide users to new workflow
-- Migration is optional but recommended
 
 ---
 
@@ -742,7 +558,3 @@ python run_model_pipeline.py --only-evaluation    # Only step 3
 - **Issues:** Report bugs at project GitHub issues page
 
 ---
-
-## License
-
-This project is licensed under the terms of the LICENSE file.

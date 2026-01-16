@@ -21,8 +21,8 @@ class DeleakagePipeline(BasePipeline):
     Inherits from BasePipeline and applies leakage filtering.
     """
 
-    input_path: Path
-    output_path: Path
+    input_path: Path | str
+    output_path: Path | str
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -50,8 +50,8 @@ class DeleakagePipeline(BasePipeline):
 
 
 def deleakage_pipeline(
-    input_path: Path = ProjectPaths.preprocessed_csv(),
-    output_path: Path = ProjectPaths.deleaked_csv(),
+    input_path: Path | str = ProjectPaths.preprocessed_csv(),
+    output_path: Path | str = ProjectPaths.deleaked_csv(),
 ) -> None:
     """
     Main entry point for the deleakage pipeline.
