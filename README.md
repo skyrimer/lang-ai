@@ -86,11 +86,6 @@ make sync
 make logfire-auth
 ```
 
-### 6. Install spaCy model
-```bash
-python -m spacy download en_core_web_sm
-```
-
 ---
 
 ## Quick Start
